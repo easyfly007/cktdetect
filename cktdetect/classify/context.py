@@ -14,6 +14,7 @@ from ..passes.families import is_transistor
 from ..passes.netroles import classify_net_roles
 from ..passes.structures import (apply_structure_roles, find_current_mirrors,
                                  find_differential_pairs)
+from ..rf.detect import find_lc_tanks
 
 
 @dataclass
@@ -26,6 +27,7 @@ class Context:
     mirrors: list
     pairs: list
     cross_coupled: list
+    tanks: list = field(default_factory=list)
     stage_edges: list = field(default_factory=list)
 
     @property
@@ -53,6 +55,7 @@ def build_context(flat: Circuit) -> Context:
         circuit=flat, infos=infos, branches=branches, non_dc=non_dc,
         roles=roles, mirrors=mirrors, pairs=pairs,
         cross_coupled=find_cross_coupled_pairs(flat),
+        tanks=find_lc_tanks(flat, infos),
     )
     ctx.stage_edges = build_stage_edges(flat, infos, branches, roles)
     return ctx
