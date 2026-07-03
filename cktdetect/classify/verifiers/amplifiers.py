@@ -10,6 +10,7 @@ from __future__ import annotations
 from ...ir.device import DeviceType
 from ...passes.families import (control_net, drain_net, polarity,
                                 source_net)
+from ...passive.ladder import r_divider_taps
 
 
 def _mirror_load(ctx, pair):
@@ -73,6 +74,11 @@ def verify_two_stage_ota(ctx):
         if not stages:
             continue
         cs = stages[0]
+        # forbidden: resistive feedback from the output to the pair input
+        # is a regulator/closed-loop topology (see verify_ldo), not an OTA
+        taps = r_divider_taps(ctx.circuit, ctx.infos, drain_net(cs))
+        if taps & set(pair["inputs"]):
+            continue
         evidence = [
             f"input stage: pair {','.join(pair['devices'])} with "
             f"mirror load ({mirror['reference']})",

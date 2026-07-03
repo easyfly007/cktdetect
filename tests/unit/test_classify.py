@@ -56,7 +56,6 @@ def test_mirror_bias():
 
 
 def test_unknown_for_out_of_scope_circuits():
-    assert top_type("rc_lowpass.sp") == "unknown"       # passive: M3 scope
     assert top_type("bulk_vote.sp") == "unknown"        # digital inverters
     assert top_type("diffpair_negative.sp") == "unknown"
 

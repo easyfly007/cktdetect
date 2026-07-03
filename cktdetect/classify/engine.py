@@ -8,17 +8,20 @@ matches, the result is a single UNKNOWN verdict -- never a guess.
 from __future__ import annotations
 
 from .context import Context
-from .verifiers import amplifiers
+from .verifiers import amplifiers, passive, power
 
 THRESHOLD = 0.6
 
 VERIFIERS = [
+    power.verify_ldo,
+    power.verify_bandgap,
     amplifiers.verify_two_stage_ota,
     amplifiers.verify_folded_cascode_ota,
     amplifiers.verify_single_stage_ota,
     amplifiers.verify_comparator,
     amplifiers.verify_buffer,
     amplifiers.verify_current_mirror_bias,
+    passive.verify_passive_network,
 ]
 
 
