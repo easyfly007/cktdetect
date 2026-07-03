@@ -15,6 +15,7 @@ def test_cli_report(tmp_path):
     assert report["flat"]["devices_by_type"]["nmos"] == 4
     assert report["flat"]["devices_by_type"]["pmos"] == 2
     assert "ota5" in report["subckts"]
+    assert report["classification"][0]["type"] == "single_stage_ota"
     assert report["net_roles"]["vdd"]["role"] == "power"
     assert report["net_roles"]["0"]["role"] == "ground"
     assert report["net_roles"]["nbias"]["role"] == "bias"

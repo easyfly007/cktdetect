@@ -6,9 +6,11 @@ A. the net is driven by a diode-connected transistor (this is also how
    current-mirror families surface: the diode is the reference, every
    same-polarity transistor gated by the net is a candidate output); or
 B. the net fans out only to control terminals, is driven only by DC
-   sources, and every gated device sits with its source on a rail
-   (a DC source driving the gate of a non-rail-sourced device is a
-   signal input, e.g. a testbench voltage on a diff-pair gate).
+   sources, and every gated device looks bias-gated: its source is on a
+   rail (current source/sink), or it is a mid-stack series device
+   (cascode). Devices whose drain is on a rail (follower inputs) or that
+   share their source with another signal-gated transistor (diff-pair
+   members) mark the net as a signal input instead.
 """
 
 from __future__ import annotations
@@ -17,8 +19,8 @@ from collections import defaultdict
 
 from ..ir.circuit import Circuit
 from ..ir.device import DeviceType
-from .families import (control_net, control_term, is_diode_connected,
-                       is_transistor, source_net)
+from .families import (control_net, control_term, drain_net,
+                       is_diode_connected, is_transistor, source_net)
 from .rails import NetRole, classify_nets
 
 _AC_SPEC_KEYWORDS = ("ac", "sin", "pulse", "pwl", "exp")
@@ -71,12 +73,33 @@ def classify_net_roles(circuit: Circuit) -> dict:
                 break
         if blocked or not gated or not drivers:
             continue
-        if all(source_net(d) is not None and is_rail(source_net(d))
-               for d in gated):
+
+        def has_diff_peer(dev):
+            src = source_net(dev)
+            for other in circuit.devices:
+                if other is dev or not is_transistor(other):
+                    continue
+                if source_net(other) != src or is_diode_connected(other):
+                    continue
+                ctrl = control_net(other)
+                if ctrl != net and infos[ctrl].role is NetRole.SIGNAL:
+                    return True
+            return False
+
+        def bias_like(dev):
+            if is_rail(source_net(dev)):
+                return True  # current source/sink
+            if is_rail(drain_net(dev)):
+                return False  # source follower input
+            if has_diff_peer(dev):
+                return False  # differential-pair input
+            return True  # mid-stack series device (cascode)
+
+        if all(bias_like(d) for d in gated):
             infos[net].role = NetRole.BIAS
             names = ",".join(d.name for d in drivers)
             infos[net].evidence.append(
                 f"dc source {names} drives gate-only net of "
-                f"rail-sourced devices")
+                f"bias-gated devices")
 
     return infos

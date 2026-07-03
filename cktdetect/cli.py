@@ -6,37 +6,32 @@ import argparse
 import json
 from collections import Counter
 
+from .classify.context import build_context
+from .classify.engine import classify
 from .ir.flatten import flatten
 from .parser.spice import SpiceParser
-from .passes.branches import decompose_branches
-from .passes.devroles import assign_device_roles
-from .passes.netroles import classify_net_roles
 from .passes.normalize import merge_parallel_mos
-from .passes.structures import (apply_structure_roles, find_current_mirrors,
-                                find_differential_pairs)
 
 
 def analyze(flat):
-    """Run the M1 analysis pipeline on a flat circuit."""
-    infos = classify_net_roles(flat)
-    branches, non_dc = decompose_branches(flat, infos)
-    mirrors = find_current_mirrors(flat, infos)
-    pairs = find_differential_pairs(flat, infos)
-    roles = assign_device_roles(flat, infos)
-    apply_structure_roles(roles, mirrors, pairs)
+    """Run the analysis pipeline on a flat circuit."""
+    ctx = build_context(flat)
     return {
+        "classification": classify(ctx),
         "net_roles": {
             net: {"role": info.role.value, "evidence": info.evidence}
-            for net, info in infos.items()
+            for net, info in ctx.infos.items()
         },
         "branches": [
             {"devices": b.devices, "rails": b.rails,
              "internal_nets": b.internal_nets, "forks": b.forks}
-            for b in branches
+            for b in ctx.branches
         ],
-        "non_dc_devices": non_dc,
-        "device_roles": roles,
-        "structures": mirrors + pairs,
+        "non_dc_devices": ctx.non_dc,
+        "device_roles": ctx.roles,
+        "structures": ctx.mirrors + ctx.pairs,
+        "cross_coupled": ctx.cross_coupled,
+        "stage_edges": ctx.stage_edges,
     }
 
 
