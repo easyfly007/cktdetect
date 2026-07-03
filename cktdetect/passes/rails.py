@@ -20,6 +20,7 @@ from ..ir.device import DeviceType
 class NetRole(str, Enum):
     POWER = "power"
     GROUND = "ground"
+    BIAS = "bias"  # assigned by the net-role pass, never by rail detection
     SIGNAL = "signal"
 
 

@@ -17,6 +17,11 @@ def test_cli_report(tmp_path):
     assert "ota5" in report["subckts"]
     assert report["net_roles"]["vdd"]["role"] == "power"
     assert report["net_roles"]["0"]["role"] == "ground"
+    assert report["net_roles"]["nbias"]["role"] == "bias"
+    assert report["device_roles"]["xota.m5"]["role"] == "tail_current_source"
+    kinds = {s["type"] for s in report["structures"]}
+    assert kinds == {"current_mirror", "differential_pair"}
+    assert any(b["forks"] == ["xota.tail"] for b in report["branches"])
 
 
 def test_cli_stdout(capsys):
