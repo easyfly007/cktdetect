@@ -4,6 +4,7 @@
 
 **范围（v1 决策，2026-07）**：
 - 覆盖领域：模拟基本块（OTA/比较器/偏置/bandgap/LDO）、射频（LNA/mixer/VCO）、无源网络（滤波器/匹配网络/分压器）。**不含**数字标准单元。
+- netlist 语法：v1 只支持**通用 SPICE 格式**（标准 SPICE / ngspice / HSPICE 的共同核心子集）；Spectre 及各方言专有扩展后置到 M5。
 - 实现语言：Python（networkx 做图算法；性能瓶颈出现后再考虑重写热点）。
 - 设计原则：**高 precision、允许 UNKNOWN**——宁可不识别，不可误识别。每个结论必须携带 evidence 列表。
 
@@ -42,8 +43,7 @@ SPICE netlist (hspice/ngspice/spectre)
 
 ### [0] Parser 前端
 
-- 每种方言一个薄前端（tokenizer + line parser），汇聚到同一个 AST。
-- HSPICE 与 ngspice 语法接近，共享大部分实现；**Spectre 语法差异大，作为独立里程碑后置**（M5）。
+- **v1 只做一个通用 SPICE 前端**，覆盖标准 SPICE / ngspice / HSPICE 的共同核心子集。前端接口按多方言设计（每方言一个薄前端汇聚到同一 IR），HSPICE 专有扩展与 Spectre 前端后置到 M5。
 - 只解析拓扑与关键参数（节点、model、W/L/M/value），对不认识的语法**容忍并告警跳过**，不追求完整 SPICE 兼容。
 - 支持：续行、`.subckt/.ends`、`.param` 与简单表达式求值、`.include/.lib`（可选展开）、`.global`。
 - 器件卡：M（MOS）、Q（BJT）、D、R、C、L、K（互感）、V/I 源、X（实例）。
@@ -178,7 +178,7 @@ CLI：`cktdetect netlist.sp --dialect hspice --pdk-profile tsmc28.yaml -o report
 
 | 里程碑 | 内容 | 验收标准 |
 |---|---|---|
-| **M0 基础设施** | HSPICE+ngspice parser、IR（层次+展平）、归一化、电源网识别、测试框架 + **20~30 个带标签的基准 netlist** | 基准集全部正确解析，电源/地识别准确 |
+| **M0 基础设施** | 通用 SPICE parser、IR（层次+展平）、归一化、电源网识别、测试框架 + **20~30 个带标签的基准 netlist** | 基准集全部正确解析，电源/地识别准确 |
 | **M1 模拟 primitive 识别器** | mirror/diff pair/cascode/diode-connected/电流源 + 置信度 + JSON 输出 | 教科书 OTA 电路的 primitive 全部正确识别，无误报 |
 | **M2 Reduction + 模拟分类** | 图压缩、功能块、反馈环检测、OTA/比较器/两级 OTA 分类 | 基准集中放大器类电路正确分类 |
 | **M3 无源 + 电源类** | R/C/L pattern、分压/滤波/去耦、BJT、LDO/bandgap/无源滤波器分类 | LDO、bandgap、RC 滤波器正确分类 |
