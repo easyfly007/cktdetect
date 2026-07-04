@@ -89,9 +89,9 @@ class SpectreParser(SpiceParser):
             for key, val in self._kv_params(tokens[1:]).items():
                 target[key] = val
             return
-        if head == "subckt":
+        if head in ("subckt", "topckt"):  # topckt: MAGICAL top-level cell
             if len(tokens) < 2:
-                raise ParseError("subckt requires a name")
+                raise ParseError(f"{head} requires a name")
             ports = [t.strip("()") for t in tokens[2:] if "=" not in t]
             circ = Circuit(name=tokens[1], ports=[p for p in ports if p],
                            params=self._kv_params(tokens[2:]))

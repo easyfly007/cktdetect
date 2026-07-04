@@ -17,7 +17,9 @@ TESTS = Path(__file__).resolve().parents[1]
 BENCH = TESTS / "benchmarks"
 ALIGN = TESTS / "external" / "align"
 OPENFASOC = TESTS / "external" / "openfasoc"
+MAGICAL = TESTS / "external" / "magical"
 SKY130 = TESTS.parent / "profiles" / "sky130.json"
+TSMC40 = TESTS.parent / "profiles" / "tsmc40_magical.json"
 
 _INTERNAL = {
     "five_t_ota.sp": "single_stage_ota",
@@ -71,6 +73,15 @@ _ALIGN = {
     "buffer.sp": (None, "unknown"),
 }
 
+_MAGICAL = {
+    "comp.sp": ("comparator_pre_amp_2018_modify_test_flow",
+                "strongarm_comparator"),
+    "ota1.sp": ("core_test_flow", "fully_differential_ota"),
+    "ota2.sp": ("ota_2", "single_stage_ota"),
+    "Telescopic_Three_stage_flow.sp": ("telescopic_three_stage_flow",
+                                       "two_stage_ota"),
+}
+
 _OPENFASOC = {
     "DCDC_COMP.sp": ("dcdc_comp", "strongarm_comparator"),
     "LC_Cell.spice": ("lc_cell_3", "lc_vco"),
@@ -93,6 +104,10 @@ def corpus():
         cases.append({"name": f"openfasoc/{fname}",
                       "path": OPENFASOC / fname, "top": top,
                       "profile": SKY130, "expected": expected})
+    for fname, (top, expected) in _MAGICAL.items():
+        cases.append({"name": f"magical/{fname}",
+                      "path": MAGICAL / fname, "top": top,
+                      "profile": TSMC40, "expected": expected})
     return cases
 
 

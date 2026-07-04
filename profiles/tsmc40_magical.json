@@ -1,0 +1,15 @@
+{
+  "models": {
+    "nch*": "nmos",
+    "pch*": "pmos",
+    "rppoly*": "resistor",
+    "rupoly*": "resistor",
+    "rnpoly*": "resistor",
+    "cfmom*": "capacitor",
+    "crtmom*": "capacitor",
+    "nmoscap*": "capacitor",
+    "pmoscap*": "capacitor",
+    "ndio*": "diode",
+    "pdio*": "diode"
+  }
+}

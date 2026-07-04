@@ -10,6 +10,10 @@ __all__ = ["SpiceParser", "SpectreParser", "parse_netlist"]
 
 _SPECTRE_LANG_RE = re.compile(r"^\s*simulator\s+lang\s*=\s*spectre",
                               re.IGNORECASE | re.MULTILINE)
+# dot-less scope keywords only exist in Spectre-style netlists (the
+# lang line is often commented out in tool exports, e.g. MAGICAL)
+_SPECTRE_SCOPE_RE = re.compile(r"^\s*(subckt|topckt|ends)\s",
+                               re.IGNORECASE | re.MULTILINE)
 
 
 def parse_netlist(path, dialect: str = "auto", profile=None):
@@ -23,7 +27,8 @@ def parse_netlist(path, dialect: str = "auto", profile=None):
     path = Path(path)
     text = path.read_text(errors="replace")
     if dialect == "auto":
-        if path.suffix.lower() == ".scs" or _SPECTRE_LANG_RE.search(text):
+        if path.suffix.lower() == ".scs" or _SPECTRE_LANG_RE.search(text) \
+                or _SPECTRE_SCOPE_RE.search(text):
             dialect = "spectre"
         else:
             dialect = "spice"  # includes CDL

@@ -17,7 +17,10 @@ from cktdetect.cli import build_report
 EXTERNAL = Path(__file__).resolve().parents[1] / "external"
 ALIGN = EXTERNAL / "align"
 OPENFASOC = EXTERNAL / "openfasoc"
-SKY130_PROFILE = Path(__file__).resolve().parents[2] / "profiles" / "sky130.json"
+MAGICAL = EXTERNAL / "magical"
+PROFILES = Path(__file__).resolve().parents[2] / "profiles"
+SKY130_PROFILE = PROFILES / "sky130.json"
+TSMC40_PROFILE = PROFILES / "tsmc40_magical.json"
 
 EXPECTED = {
     "five_transistor_ota": "single_stage_ota",
@@ -118,6 +121,44 @@ def test_sky130_x_instances_promoted():
     assert by_type == {"nmos": 5, "pmos": 6}
     assert report["net_roles"]["vpwr"]["role"] == "power"
     assert report["net_roles"]["vgnd"]["role"] == "ground"
+    assert not report["warnings"]
+
+
+# ----------------------------------------------------------------------
+# MAGICAL (tsmc40, Spectre dialect with MAGICAL's topckt keyword)
+
+MAGICAL_EXPECTED = {
+    # comparator pre-amp with dummy devices: fully correct
+    ("comp.sp", "comparator_pre_amp_2018_modify_test_flow"):
+        "strongarm_comparator",
+    # fully differential two-stage Miller OTA: FD family correct
+    # (stage-count granularity is a known limitation)
+    ("ota1.sp", "core_test_flow"): "fully_differential_ota",
+    # multi-stage feedforward FD OTA: the CMFB error amplifier is
+    # claimed as the main amp -- family correct, subtype coarse
+    # (documented known gap, see tests/external/README.md)
+    ("ota2.sp", "ota_2"): "single_stage_ota",
+    ("Telescopic_Three_stage_flow.sp", "telescopic_three_stage_flow"):
+        "two_stage_ota",
+}
+
+
+@pytest.mark.parametrize("case,expected", sorted(MAGICAL_EXPECTED.items()))
+def test_magical_benchmark(case, expected):
+    fname, top = case
+    report = build_report(MAGICAL / fname, top=top,
+                          pdk_profile=TSMC40_PROFILE)
+    assert report["classification"][0]["type"] == expected
+
+
+def test_magical_dummy_devices_do_not_break_comparator():
+    # comp.sp carries gate-to-signal dummies with drain==source==GND
+    report = build_report(MAGICAL / "comp.sp",
+                          top="comparator_pre_amp_2018_modify_test_flow",
+                          pdk_profile=TSMC40_PROFILE)
+    top = report["classification"][0]
+    assert top["type"] == "strongarm_comparator"
+    assert top["confidence"] >= 0.9
     assert not report["warnings"]
 
 

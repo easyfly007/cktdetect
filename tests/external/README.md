@@ -63,7 +63,29 @@
 
 **结论：4/5 正确标注 + 1 个合理拒判，0 个误判。**
 
-## 两个数据集合计
+## magical/ — MAGICAL benchmark 电路（TSMC40）
 
-17 个第三方电路：**15 个正确标注、2 个合理拒判、0 个误判、
-0 个遗留缺口**。
+- 来源：[magical-eda/MAGICAL](https://github.com/magical-eda/MAGICAL)
+  `examples/`（UT Austin 开源模拟版图项目），master 分支，2026-07 抓取。
+- 许可：BSD-3-Clause（文件内容未修改）。
+- 特点：Spectre 方言但 `simulator lang` 行被注释（推动了免声明的
+  方言自动检测）、MAGICAL 特有的 `topckt` 关键字、TSMC40 PDK 原语
+  以 X 实例出现（`cfmom` MOM 电容、`rppoly` 电阻——配
+  `profiles/tsmc40_magical.json`）、真实 dummy 器件
+  （drain==source==GND 的栅挂信号管）。
+
+## 验证结果（`--pdk-profile profiles/tsmc40_magical.json --top <cell>`）
+
+| netlist | 电路 | 分类结果 | 判定 |
+|---|---|---|---|
+| comp.sp | 预放大动态比较器（含 dummy 管） | `strongarm_comparator` (0.9) | ✅ 正确 |
+| ota1.sp | 全差分两级 Miller OTA | `fully_differential_ota` (0.85) | ✅ 正确（FD 家族与结构对；级数细分未做） |
+| ota2.sp | 前馈补偿多级 FD OTA | `single_stage_ota` (0.9) | ⚠️ 部分正确：判中的 pair 实为 CMFB 误差放大器——**FD 多级 OTA 的 CMFB 支路会被当成主放大器**，已知缺口 |
+| Telescopic_Three_stage_flow.sp | 三级套筒 FD OTA | `two_stage_ota` (0.85) | ⚠️ 部分正确：同上（放大器家族对，级数与差分性粗略） |
+| CTDSM_TOP.sp | ΔΣ 调制器顶层 | 未入库 | 混方言（dot/无 dot subckt 混用）+ 52 处数字标准单元，待混方言支持后加入 |
+
+## 三个数据集合计
+
+21 个入库第三方电路：**17 个正确标注、2 个部分正确（FD 多级 OTA
+的 CMFB 支路误当主放大器——最高优先级已知缺口）、2 个合理拒判、
+0 个完全误判**。
