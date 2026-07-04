@@ -149,6 +149,9 @@ cktdetect NETLIST [选项]
 | `folded_cascode_ota` | 折叠 cascode（对管输出折入反极性 cascode） | 0.75–0.90 |
 | `telescopic_ota` | 套筒 cascode（对管输出叠同极性 cascode） | 0.75–0.90 |
 | `fully_differential_ota` | 全差分 OTA，可检出电阻式 CMFB | 0.75–0.95 |
+| `common_source_amplifier` | 单管共源增益级（含负载类型证据） | 0.65–0.80 |
+| `rail_to_rail_input_stage` | 轨到轨输入级（互补双差分对共享输入） | 0.80–0.85 |
+| `class_ab_output_stage` | class-AB 推挽输出级（互补对、独立栅驱动） | 0.75–0.80 |
 | `buffer` | 源跟随器缓冲器 | 0.70 |
 
 ### 比较器类
@@ -167,13 +170,22 @@ cktdetect NETLIST [选项]
 | `ldo` | LDO（误差放大器 + pass 管 + 电阻分压负反馈） | 0.85–0.90 |
 | `bandgap_core` | bandgap ΔVbe 核（含结面积比证据） | 0.75–0.90 |
 
-### 射频类
+### 射频与振荡器类
 
 | `type` 输出 | 电路 | 置信度 |
 |---|---|---|
 | `lc_vco` | LC 振荡器（交叉耦合负阻 + tank） | 0.85–0.90 |
+| `ring_oscillator` | 环形振荡器（奇数级反相器闭环） | 0.85–0.90 |
 | `lna` | 低噪放（源极电感退化 + 栅匹配 + cascode） | 0.75–0.95 |
 | `gilbert_mixer` | Gilbert 混频器（三层栈交叉连接开关四管） | 0.85–0.90 |
+
+### 开关与数据转换类
+
+| `type` 输出 | 电路 | 置信度 |
+|---|---|---|
+| `sample_and_hold` | 采样保持（pass 开关 + 高阻保持电容节点 + 缓冲器） | 0.75–0.85 |
+| `dickson_charge_pump` | Dickson 电荷泵（diode 链 + 交替时钟泵电容） | 0.80–0.85 |
+| `r2r_ladder` | R-2R DAC 梯形电阻网络（骨架 R + 每节点 2R 支路） | 0.85–0.90 |
 
 ### 无源网络类（无晶体管电路走独立分析路径）
 
@@ -237,8 +249,10 @@ cktdetect a.sp --diff b.sp -o diff.json
 
 ## 11. 已知限制
 
-- **明确输出 unknown**：数字标准单元（范围外）、switched-cap 电路
-  （DC 支路被开关切断）、translinear 环路、大量 pass-gate 的开关阵列。
+- **明确输出 unknown**：数字标准单元（范围外——反相器会被内部识别，
+  用于环形振荡器检测和防误报，但纯逻辑链仍输出 unknown）、多相
+  switched-cap 滤波器（简单采样保持已支持）、translinear 环路、
+  大量 pass-gate 的开关阵列。
 - `.include`/`.lib` 不展开。
 - 极性无法推断的 MOS 会降级处理（见 4.3）。
 - 无源梯形分析要求简单梯形（每级单一串联路径），复杂多端口无源网络

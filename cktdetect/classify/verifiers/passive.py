@@ -2,7 +2,26 @@
 
 from __future__ import annotations
 
+from ...passive.arrays import find_r2r_ladder
 from ...passive.ladder import analyze_passive_network
+
+
+def verify_r2r_ladder(ctx):
+    ladder = find_r2r_ladder(ctx.circuit, ctx.infos)
+    if ladder is None:
+        return None
+    evidence = [
+        f"{ladder['bits']}-node backbone of series R "
+        f"({','.join(ladder['series'])}, R={ladder['unit_value']:g})",
+        f"2R branch on every backbone node "
+        f"({','.join(ladder['branches'])})",
+    ]
+    confidence = 0.85
+    if ladder["terminator"]:
+        confidence += 0.05
+        evidence.append(f"2R ground terminator {ladder['terminator']}")
+    return {"type": "r2r_ladder", "confidence": round(confidence, 3),
+            "evidence": evidence}
 
 
 def verify_passive_network(ctx):

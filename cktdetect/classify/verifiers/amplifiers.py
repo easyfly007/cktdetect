@@ -316,6 +316,105 @@ def verify_comparator(ctx):
     return None
 
 
+def _push_pull_pairs(ctx):
+    """Complementary common-source devices sharing a drain net."""
+    cs = ctx.devices_by_role("common_source")
+    found = []
+    for n_dev in [d for d in cs if polarity(d) == "n"]:
+        for p_dev in [d for d in cs if polarity(d) == "p"]:
+            if drain_net(n_dev) == drain_net(p_dev):
+                found.append((n_dev, p_dev))
+    return found
+
+
+def verify_rail_to_rail_input_stage(ctx):
+    """Complementary differential pairs sharing the same input nets."""
+    for i, pair_a in enumerate(ctx.pairs):
+        for pair_b in ctx.pairs[i + 1:]:
+            if pair_a["polarity"] == pair_b["polarity"]:
+                continue
+            if set(pair_a["inputs"]) != set(pair_b["inputs"]):
+                continue
+            evidence = [
+                f"complementary input pairs "
+                f"{','.join(pair_a['devices'])} (n) and "
+                f"{','.join(pair_b['devices'])} (p) share inputs "
+                f"{','.join(sorted(set(pair_a['inputs'])))}",
+                "input common-mode range spans both rails",
+            ]
+            confidence = 0.8
+            if pair_a["tail_source"] and pair_b["tail_source"]:
+                confidence += 0.05
+                evidence.append(
+                    f"independent tails {pair_a['tail_source']},"
+                    f"{pair_b['tail_source']}")
+            return {"type": "rail_to_rail_input_stage",
+                    "confidence": round(confidence, 3),
+                    "evidence": evidence}
+    return None
+
+
+def verify_class_ab_output_stage(ctx):
+    """Complementary push-pull pair with distinct signal drives."""
+    if ctx.pairs:
+        return None  # amplifier verifiers own circuits with input pairs
+    for n_dev, p_dev in _push_pull_pairs(ctx):
+        if control_net(n_dev) == control_net(p_dev):
+            continue  # shared gate is a logic inverter, out of scope
+        out = drain_net(n_dev)
+        evidence = [
+            f"complementary push-pull devices {p_dev.name} (sources) / "
+            f"{n_dev.name} (sinks) drive '{out}'",
+            f"separate gate drives '{control_net(p_dev)}' and "
+            f"'{control_net(n_dev)}' (class-AB biasing)",
+        ]
+        confidence = 0.75
+        if any(dev.dtype in (DeviceType.RESISTOR, DeviceType.CAPACITOR)
+               and out in dev.nets for dev in ctx.circuit.devices):
+            confidence += 0.05
+            evidence.append(f"load on the output net '{out}'")
+        return {"type": "class_ab_output_stage",
+                "confidence": round(confidence, 3), "evidence": evidence}
+    return None
+
+
+def verify_common_source_amplifier(ctx):
+    """Single common-source gain device -- the fallback gain stage."""
+    if ctx.pairs:
+        return None
+    in_inverter = {name for inv in ctx.inverters for name in inv["devices"]}
+    in_push_pull = {d.name for pair in _push_pull_pairs(ctx) for d in pair}
+    gain = [d for d in ctx.devices_by_role("common_source")
+            if d.name not in in_inverter and d.name not in in_push_pull]
+    if not gain:
+        return None
+    dev = gain[0]
+    out = drain_net(dev)
+    evidence = [f"common-source gain device {dev.name} "
+                f"(input '{control_net(dev)}', output '{out}')"]
+    confidence = 0.65
+    load = next((d for d in ctx.transistors
+                 if drain_net(d) == out and ctx.role(d.name) in
+                 ("current_source", "current_sink", "mirror_output")
+                 and d is not dev), None)
+    if load:
+        confidence += 0.1
+        evidence.append(f"current-source load {load.name}")
+    else:
+        rload = next((d for d in ctx.circuit.devices
+                      if d.dtype is DeviceType.RESISTOR and out in d.nets),
+                     None)
+        if rload:
+            confidence += 0.05
+            evidence.append(f"resistive load {rload.name}")
+    if any(d.dtype is DeviceType.CAPACITOR and out in d.nets
+           for d in ctx.circuit.devices):
+        confidence += 0.05
+        evidence.append(f"load capacitance on '{out}'")
+    return {"type": "common_source_amplifier",
+            "confidence": round(confidence, 3), "evidence": evidence}
+
+
 def verify_buffer(ctx):
     followers = ctx.devices_by_role("source_follower")
     if not followers or ctx.pairs:

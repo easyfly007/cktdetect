@@ -38,10 +38,12 @@ never a guess.
 ## Supported circuit types
 
 OTA (single-stage, two-stage Miller, folded cascode, telescopic,
-fully differential with CMFB), comparators (static latch and StrongARM
-dynamic), buffer, current-mirror and beta-multiplier bias networks,
-LDO, bandgap core, LC VCO, LNA, Gilbert mixer, passive filters
-(RC/LC low/high/bandpass) and resistive dividers.
+fully differential with CMFB), common-source amplifier, rail-to-rail
+input stage, class-AB output stage, comparators (static latch and
+StrongARM dynamic), buffer, current-mirror and beta-multiplier bias
+networks, LDO, bandgap core, LC VCO, ring oscillator, LNA, Gilbert
+mixer, sample-and-hold, Dickson charge pump, R-2R ladder, passive
+filters (RC/LC low/high/bandpass) and resistive dividers.
 
 The full user guide — CLI reference, input format coverage, report
 field documentation, the complete type list with confidence ranges,

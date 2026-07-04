@@ -8,7 +8,8 @@ matches, the result is a single UNKNOWN verdict -- never a guess.
 from __future__ import annotations
 
 from .context import Context
-from .verifiers import amplifiers, passive, power, rf
+from .verifiers import (amplifiers, oscillators, passive, power, rf,
+                        switched)
 
 THRESHOLD = 0.6
 
@@ -26,8 +27,15 @@ VERIFIERS = [
     amplifiers.verify_single_stage_ota,
     amplifiers.verify_strongarm_comparator,
     amplifiers.verify_comparator,
+    amplifiers.verify_rail_to_rail_input_stage,
+    oscillators.verify_ring_oscillator,
+    switched.verify_dickson_charge_pump,
+    switched.verify_sample_and_hold,
+    amplifiers.verify_class_ab_output_stage,
+    amplifiers.verify_common_source_amplifier,
     amplifiers.verify_buffer,
     amplifiers.verify_current_mirror_bias,
+    passive.verify_r2r_ladder,
     passive.verify_passive_network,
 ]
 
