@@ -49,6 +49,65 @@ def verify_ldo(ctx):
     return None
 
 
+def verify_beta_multiplier(ctx):
+    """Self-biased constant-gm reference: mirror interlocked with an
+    opposite-polarity diode and a source-degenerated companion."""
+    from ...passes.families import strength
+
+    resistors = [d for d in ctx.circuit.devices
+                 if d.dtype is DeviceType.RESISTOR]
+
+    def is_rail(net):
+        return ctx.infos[net].role in (NetRole.POWER, NetRole.GROUND)
+
+    for mirror in ctx.mirrors:
+        gate_net = mirror["gate_net"]
+        for out in mirror["outputs"]:
+            out_drain = out["drain_net"]
+            diodes = [d for d in ctx.transistors
+                      if is_diode_connected(d)
+                      and drain_net(d) == out_drain
+                      and polarity(d) is not None
+                      and polarity(d) != mirror["polarity"]]
+            if not diodes:
+                continue
+            diode = diodes[0]
+            companions = [
+                d for d in ctx.transistors
+                if d is not diode and control_net(d) == out_drain
+                and polarity(d) == polarity(diode)
+                and drain_net(d) == gate_net]
+            for comp in companions:
+                src = source_net(comp)
+                if is_rail(src):
+                    continue
+                degeneration = [r for r in resistors
+                                if src in r.nets
+                                and any(is_rail(n) for n in r.nets)]
+                if not degeneration:
+                    continue
+                evidence = [
+                    f"mirror ({mirror['reference']} -> "
+                    f"{out['device']}) interlocked with diode "
+                    f"{diode.name}",
+                    f"companion {comp.name} closes the self-biased loop "
+                    f"back to '{gate_net}'",
+                    f"source degeneration resistor "
+                    f"{degeneration[0].name} sets the current",
+                ]
+                confidence = 0.8
+                s_comp, s_diode = strength(comp), strength(diode)
+                if s_comp and s_diode and s_comp > s_diode:
+                    confidence += 0.05
+                    evidence.append(
+                        f"W/L ratio {s_comp / s_diode:g}:1 between "
+                        f"companion and diode (beta multiplication)")
+                return {"type": "beta_multiplier_bias",
+                        "confidence": round(confidence, 3),
+                        "evidence": evidence}
+    return None
+
+
 def _area(dev) -> float:
     area = dev.params.get("area", 1.0)
     m = dev.params.get("m", 1.0)

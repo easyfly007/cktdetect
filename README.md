@@ -37,10 +37,11 @@ never a guess.
 
 ## Supported circuit types
 
-OTA (single-stage, two-stage Miller, folded cascode), comparator,
-buffer, current-mirror bias networks, LDO, bandgap core, LC VCO, LNA,
-Gilbert mixer, passive filters (RC/LC low/high/bandpass) and resistive
-dividers.
+OTA (single-stage, two-stage Miller, folded cascode, telescopic,
+fully differential with CMFB), comparators (static latch and StrongARM
+dynamic), buffer, current-mirror and beta-multiplier bias networks,
+LDO, bandgap core, LC VCO, LNA, Gilbert mixer, passive filters
+(RC/LC low/high/bandpass) and resistive dividers.
 
 ## Usage
 

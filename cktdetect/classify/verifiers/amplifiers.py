@@ -133,6 +133,167 @@ def verify_folded_cascode_ota(ctx):
     return None
 
 
+def verify_telescopic_ota(ctx):
+    """Same-polarity cascodes stacked directly on the pair outputs."""
+    for pair in ctx.pairs:
+        outs = set(pair["outputs"])
+        cascodes = [d for d in ctx.transistors
+                    if ctx.role(d.name) == "cascode"
+                    and source_net(d) in outs
+                    and polarity(d) == pair["polarity"]]
+        if len(cascodes) < 2:
+            continue
+        evidence = [
+            f"differential pair {','.join(pair['devices'])}",
+            f"same-polarity cascodes {','.join(d.name for d in cascodes)} "
+            f"stacked on the pair outputs {','.join(sorted(outs))}",
+        ]
+        confidence = 0.75
+        if pair["tail_source"]:
+            confidence += 0.05
+            evidence.append(f"tail current source {pair['tail_source']}")
+        casc_outs = {drain_net(d) for d in cascodes}
+        for mirror in ctx.mirrors:
+            if mirror["polarity"] == pair["polarity"]:
+                continue
+            ref = ctx.circuit.device(mirror["reference"])
+            nets = {drain_net(ref)} | {o["drain_net"]
+                                       for o in mirror["outputs"]}
+            if nets & casc_outs:
+                confidence += 0.1
+                evidence.append(f"mirror load ({mirror['reference']}) on "
+                                f"the cascode outputs")
+                break
+        return {"type": "telescopic_ota",
+                "confidence": round(confidence, 3), "evidence": evidence}
+    return None
+
+
+def verify_fully_differential_ota(ctx):
+    """Pair with matched current-source loads on both outputs, no mirror
+    (a mirror load makes it single-ended), optionally with resistive
+    common-mode feedback."""
+    if ctx.cross_coupled:
+        return None  # latch loads belong to comparators/oscillators
+    for pair in ctx.pairs:
+        outs = set(pair["outputs"])
+        mirror_hit = False
+        for mirror in ctx.mirrors:
+            ref = ctx.circuit.device(mirror["reference"])
+            nets = {drain_net(ref)} | {o["drain_net"]
+                                       for o in mirror["outputs"]}
+            if nets & outs:
+                mirror_hit = True
+                break
+        if mirror_hit:
+            continue
+        if any(ctx.role(d.name) == "cascode" and source_net(d) in outs
+               for d in ctx.transistors):
+            continue  # telescopic/folded territory
+        loads = {}
+        for net in outs:
+            for dev in ctx.transistors:
+                if drain_net(dev) == net and polarity(dev) != \
+                        pair["polarity"] and ctx.role(dev.name) in \
+                        ("current_source", "current_sink", "mirror_output"):
+                    loads[net] = dev
+                    break
+        if len(loads) != len(outs) or len(outs) != 2:
+            continue
+        load_a, load_b = sorted(loads.values(), key=lambda d: d.name)
+        evidence = [
+            f"differential pair {','.join(pair['devices'])} with both "
+            f"outputs {','.join(sorted(outs))} kept differential",
+            f"current-source loads {load_a.name},{load_b.name} "
+            f"(no mirror: outputs are not single-ended)",
+        ]
+        confidence = 0.75
+        if pair["tail_source"]:
+            confidence += 0.05
+            evidence.append(f"tail current source {pair['tail_source']}")
+        if all(load_a.params.get(k) == load_b.params.get(k)
+               and isinstance(load_a.params.get(k), (int, float))
+               for k in ("w", "l")):
+            confidence += 0.05
+            evidence.append("matched load geometry")
+        # resistive common-mode feedback: both outputs sensed by resistors
+        # into one net that gates a transistor
+        resistors = [d for d in ctx.circuit.devices
+                     if d.dtype is DeviceType.RESISTOR]
+        out_a, out_b = sorted(outs)
+        for cm_net in sorted(ctx.circuit.nets()):
+            if cm_net in outs:
+                continue
+            if not (any(set(r.nets) == {out_a, cm_net} for r in resistors)
+                    and any(set(r.nets) == {out_b, cm_net}
+                            for r in resistors)):
+                continue
+            sensor = next((d for d in ctx.transistors
+                           if control_net(d) == cm_net), None)
+            if sensor:
+                confidence += 0.1
+                evidence.append(
+                    f"common-mode feedback: sense resistors average the "
+                    f"outputs into '{cm_net}' gating {sensor.name}")
+                break
+        return {"type": "fully_differential_ota",
+                "confidence": round(confidence, 3), "evidence": evidence}
+    return None
+
+
+def verify_strongarm_comparator(ctx):
+    """Clocked tail + precharge devices + pair + regenerative latch."""
+    if ctx.has_type(DeviceType.INDUCTOR):
+        return None
+    from collections import defaultdict
+
+    from ...passes.rails import NetRole
+
+    by_gate = defaultdict(list)
+    for dev in ctx.transistors:
+        by_gate[control_net(dev)].append(dev)
+
+    for net, gated in sorted(by_gate.items()):
+        tails = [d for d in gated if polarity(d) == "n"
+                 and ctx.infos[source_net(d)].role is NetRole.GROUND]
+        precharge = [d for d in gated if polarity(d) == "p"
+                     and ctx.infos[source_net(d)].role is NetRole.POWER]
+        if not tails or len(precharge) < 2:
+            continue
+        for tail_dev in tails:
+            for pair in ctx.pairs:
+                if pair["tail_net"] != drain_net(tail_dev):
+                    continue
+                outs = set(pair["outputs"])
+                latch = None
+                for xc in ctx.cross_coupled:
+                    touched = set(xc["nets"]) | {
+                        source_net(ctx.circuit.device(n))
+                        for n in xc["devices"]}
+                    if touched & outs:
+                        latch = xc
+                        break
+                if latch is None:
+                    continue
+                evidence = [
+                    f"clocked tail {tail_dev.name} and precharge devices "
+                    f"{','.join(d.name for d in precharge)} share gate "
+                    f"net '{net}' (clock)",
+                    f"input pair {','.join(pair['devices'])}",
+                    f"regenerative cross-coupled pair "
+                    f"{','.join(latch['devices'])}",
+                ]
+                confidence = 0.85
+                if len(ctx.cross_coupled) >= 2:
+                    confidence += 0.05
+                    evidence.append(
+                        "complementary nmos+pmos cross-coupled pairs")
+                return {"type": "strongarm_comparator",
+                        "confidence": round(confidence, 3),
+                        "evidence": evidence}
+    return None
+
+
 def verify_comparator(ctx):
     if ctx.has_type(DeviceType.INDUCTOR):
         return None  # cross-coupled + inductor is an oscillator, not a latch
