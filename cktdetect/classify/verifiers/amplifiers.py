@@ -384,10 +384,13 @@ def verify_common_source_amplifier(ctx):
         return None
     in_inverter = {name for inv in ctx.inverters for name in inv["devices"]}
     in_push_pull = {d.name for pair in _push_pull_pairs(ctx) for d in pair}
+    in_loop = {name for loop in ctx.inverting_loops
+               for name in loop["devices"]}
     gain = [d for d in ctx.devices_by_role("common_source")
-            if d.name not in in_inverter and d.name not in in_push_pull]
-    if not gain:
-        return None
+            if d.name not in in_inverter and d.name not in in_push_pull
+            and d.name not in in_loop]
+    if len(gain) != 1:
+        return None  # several gain devices: a chain/array, not a CS amp
     dev = gain[0]
     out = drain_net(dev)
     evidence = [f"common-source gain device {dev.name} "
@@ -395,11 +398,14 @@ def verify_common_source_amplifier(ctx):
     confidence = 0.65
     load = next((d for d in ctx.transistors
                  if drain_net(d) == out and ctx.role(d.name) in
-                 ("current_source", "current_sink", "mirror_output")
+                 ("current_source", "current_sink", "mirror_output",
+                  "diode", "mirror_reference")
                  and d is not dev), None)
     if load:
         confidence += 0.1
-        evidence.append(f"current-source load {load.name}")
+        kind = ("diode-connected" if ctx.role(load.name) in
+                ("diode", "mirror_reference") else "current-source")
+        evidence.append(f"{kind} load {load.name}")
     else:
         rload = next((d for d in ctx.circuit.devices
                       if d.dtype is DeviceType.RESISTOR and out in d.nets),

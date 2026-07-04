@@ -159,7 +159,11 @@ class SpiceParser:
         lines = []
         for lineno, raw in enumerate(text.splitlines(), 1):
             line = re.split(r"\s[;$]", raw, maxsplit=1)[0].strip()
-            if not line or line.startswith("*"):
+            if not line or line.startswith("*") or line.startswith("//"):
+                continue
+            if lines and lines[-1][1].endswith("\\"):
+                # previous line continues (trailing backslash)
+                lines[-1][1] = lines[-1][1][:-1].rstrip() + " " + line
                 continue
             if line.startswith("+"):
                 if lines:

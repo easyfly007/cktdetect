@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from ..graph.feedback import find_cross_coupled_pairs
-from ..graph.logic import find_inverter_rings, find_inverters
+from ..graph.logic import (find_inverter_rings, find_inverters,
+                           find_inverting_loops)
 from ..graph.stagegraph import build_stage_edges
 from ..ir.circuit import Circuit
 from ..ir.device import DeviceType
@@ -31,6 +32,7 @@ class Context:
     tanks: list = field(default_factory=list)
     inverters: list = field(default_factory=list)
     inverter_rings: list = field(default_factory=list)
+    inverting_loops: list = field(default_factory=list)
     stage_edges: list = field(default_factory=list)
 
     @property
@@ -62,5 +64,6 @@ def build_context(flat: Circuit, profile=None) -> Context:
         inverters=find_inverters(flat, infos),
     )
     ctx.inverter_rings = find_inverter_rings(ctx.inverters)
+    ctx.inverting_loops = find_inverting_loops(flat, infos)
     ctx.stage_edges = build_stage_edges(flat, infos, branches, roles)
     return ctx

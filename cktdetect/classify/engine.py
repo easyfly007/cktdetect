@@ -29,6 +29,7 @@ VERIFIERS = [
     amplifiers.verify_comparator,
     amplifiers.verify_rail_to_rail_input_stage,
     oscillators.verify_ring_oscillator,
+    switched.verify_switched_capacitor,
     switched.verify_dickson_charge_pump,
     switched.verify_sample_and_hold,
     amplifiers.verify_class_ab_output_stage,

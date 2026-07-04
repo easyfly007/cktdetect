@@ -42,6 +42,57 @@ def find_inverters(circuit, infos) -> list:
     return inverters
 
 
+def find_inverting_loops(circuit, infos) -> list:
+    """Odd/even cycles in the net-level gate->drain relation.
+
+    Each signal-gated, non-diode transistor contributes an inverting hop
+    from its gate net to its drain net. This generalizes the CMOS
+    inverter ring to current-starved and single-ended stages: any odd
+    cycle of length >= 3 is a ring oscillator core.
+    """
+    from collections import defaultdict
+
+    from ..passes.families import is_diode_connected
+
+    rails = {n for n, i in infos.items()
+             if i.role in (NetRole.POWER, NetRole.GROUND)}
+    edges = defaultdict(set)
+    hop_devices = defaultdict(list)
+    for dev in circuit.devices:
+        if not is_transistor(dev) or is_diode_connected(dev):
+            continue
+        gate, drain = control_net(dev), drain_net(dev)
+        if gate in rails or drain in rails or gate == drain:
+            continue
+        if infos[gate].role is not NetRole.SIGNAL:
+            continue
+        edges[gate].add(drain)
+        hop_devices[(gate, drain)].append(dev.name)
+
+    loops, seen = [], set()
+    limit = 15
+
+    def dfs(start, node, path):
+        if len(path) > limit:
+            return
+        for nxt in sorted(edges.get(node, ())):
+            if nxt == start:
+                key = frozenset(path)
+                if key not in seen:
+                    seen.add(key)
+                    devices = sorted({name
+                                      for a, b in zip(path, path[1:] + [start])
+                                      for name in hop_devices[(a, b)]})
+                    loops.append({"nets": list(path), "devices": devices})
+            elif nxt not in path and nxt > start:
+                dfs(start, nxt, path + [nxt])
+
+    for start in sorted(edges):
+        dfs(start, start, [start])
+    loops.sort(key=lambda l: (len(l["nets"]), l["nets"]))
+    return loops
+
+
 def find_inverter_rings(inverters) -> list:
     """Cycles in the inverter input->output relation.
 

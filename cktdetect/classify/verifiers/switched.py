@@ -68,6 +68,57 @@ def verify_sample_and_hold(ctx):
     return None
 
 
+def verify_switched_capacitor(ctx):
+    """Multi-phase switch network over capacitors.
+
+    Required: at least two clock nets, each gating >= 3 pass switches
+    (non-diode transistors with no channel terminal on power), and
+    capacitors on the switched nets. An embedded amplifier still shows
+    up as a lower-ranked verdict -- the circuit as a whole is SC.
+    """
+    from collections import defaultdict
+
+    caps = [c for c in ctx.circuit.devices
+            if c.dtype is DeviceType.CAPACITOR]
+    if len(caps) < 2:
+        return None
+
+    power = {n for n, i in ctx.infos.items() if i.role is NetRole.POWER}
+    switches_by_gate = defaultdict(list)
+    for dev in ctx.transistors:
+        if is_diode_connected(dev):
+            continue
+        d, s = drain_net(dev), source_net(dev)
+        gate = control_net(dev)
+        if d in power or s in power or gate in (d, s):
+            continue
+        switches_by_gate[gate].append(dev)
+
+    clocks = sorted(g for g, devs in switches_by_gate.items()
+                    if len(devs) >= 3)
+    if len(clocks) < 2:
+        return None
+
+    switched_nets = set()
+    n_switches = 0
+    for clock in clocks:
+        for dev in switches_by_gate[clock]:
+            switched_nets.update((drain_net(dev), source_net(dev)))
+            n_switches += 1
+    sc_caps = [c for c in caps if set(c.nets) & switched_nets]
+    if len(sc_caps) < 2:
+        return None
+
+    evidence = [
+        f"{len(clocks)} switch phases ({','.join(clocks)}) driving "
+        f"{n_switches} pass switches",
+        f"{len(sc_caps)} capacitors on the switched nets "
+        f"({','.join(c.name for c in sc_caps[:6])})",
+    ]
+    return {"type": "switched_capacitor_circuit", "confidence": 0.85,
+            "evidence": evidence}
+
+
 def verify_dickson_charge_pump(ctx):
     """Chain of diode-connected devices with pump capacitors driven by
     clock nets on the internal nodes."""

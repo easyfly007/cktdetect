@@ -71,7 +71,7 @@ def classify_net_roles(circuit: Circuit, profile=None) -> dict:
             else:
                 blocked = True
                 break
-        if blocked or not gated or not drivers:
+        if blocked or not gated:
             continue
 
         def has_diff_peer(dev):
@@ -95,11 +95,27 @@ def classify_net_roles(circuit: Circuit, profile=None) -> dict:
                 return False  # differential-pair input
             return True  # mid-stack series device (cascode)
 
-        if all(bias_like(d) for d in gated):
-            infos[net].role = NetRole.BIAS
-            names = ",".join(d.name for d in drivers)
-            infos[net].evidence.append(
-                f"dc source {names} drives gate-only net of "
-                f"bias-gated devices")
+        if drivers:
+            if all(bias_like(d) for d in gated):
+                infos[net].role = NetRole.BIAS
+                names = ",".join(d.name for d in drivers)
+                infos[net].evidence.append(
+                    f"dc source {names} drives gate-only net of "
+                    f"bias-gated devices")
+        else:
+            # undriven gate-only net -- typically a bias port of a
+            # flattened subckt. Only mid-stack (cascode-style) gating
+            # justifies bias; rail-sourced devices could be a
+            # common-source input, and follower/pair inputs stay signal.
+            def strict_mid_stack(dev):
+                return (not is_rail(source_net(dev))
+                        and not is_rail(drain_net(dev))
+                        and not has_diff_peer(dev))
+
+            if all(strict_mid_stack(d) for d in gated):
+                infos[net].role = NetRole.BIAS
+                infos[net].evidence.append(
+                    "undriven gate-only net of mid-stack devices "
+                    "(bias port)")
 
     return infos
