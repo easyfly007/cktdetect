@@ -134,12 +134,14 @@ MAGICAL_EXPECTED = {
     # fully differential two-stage Miller OTA: FD family correct
     # (stage-count granularity is a known limitation)
     ("ota1.sp", "core_test_flow"): "fully_differential_ota",
-    # multi-stage feedforward FD OTA: the CMFB error amplifier is
-    # claimed as the main amp -- family correct, subtype coarse
-    # (documented known gap, see tests/external/README.md)
-    ("ota2.sp", "ota_2"): "single_stage_ota",
+    # multi-stage feedforward FD OTA with complementary (nch+pch)
+    # input pairs on vim/vip: the rail-to-rail input stage is its most
+    # specific recognized structure (multi-stage granularity pending)
+    ("ota2.sp", "ota_2"): "rail_to_rail_input_stage",
+    # three-stage FD OTA: verdict now grounds on the true main pair
+    # (CMFB error amp correctly set aside), first stage is telescopic
     ("Telescopic_Three_stage_flow.sp", "telescopic_three_stage_flow"):
-        "two_stage_ota",
+        "telescopic_ota",
 }
 
 

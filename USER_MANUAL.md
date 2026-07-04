@@ -154,7 +154,7 @@ cktdetect design.spice --pdk-profile profiles/sky130.json
 | `classification` | 电路类型结论列表；每项含 `type`、`scope`（`system`/`block`/`template`）、`confidence`、`evidence`。系统级与模板结论排在块级之前，层内按置信度降序。无结论时为单个 `unknown` |
 | `net_roles` | 每个 net 的角色：`power` / `ground` / `bias` / `signal`，附证据 |
 | `device_roles` | 每个晶体管的角色（见 5.1），附证据 |
-| `structures` | 识别出的结构：电流镜（reference/outputs/电流比例）、差分对（inputs/outputs/tail） |
+| `structures` | 识别出的结构：电流镜（reference/outputs/电流比例、`variant` simple/cascode）、差分对（inputs/outputs/tail、`cmfb_like` 标记——单侧输入是 R/C 平均两个非轨网的 CM 感知网时判为 CMFB 误差放大器，不会被当成主放大器） |
 | `cross_coupled` | 交叉耦合对（正反馈 2-cycle） |
 | `feedback_loops` | 通用反馈环分析：带符号信号图（栅→漏反相、follower 同相、R/C 直通）上的环，标注 `polarity`（negative/positive）与 `ac`（含电容跳变，如 Miller 补偿）。LDO 结论会引用它确认调节环极性——**误接成正反馈时输出 WARNING** |
 | `tanks` | LC 谐振腔（`parallel` / `differential` / `single_ended` 三种形态） |

@@ -47,6 +47,8 @@ def _miller_caps(ctx, cs_dev):
 
 def verify_single_stage_ota(ctx):
     for pair in ctx.pairs:
+        if pair.get("cmfb_like"):
+            continue  # a CMFB error amp is never the main amplifier
         mirror, full = _mirror_load(ctx, pair)
         if mirror is None:
             continue
@@ -71,6 +73,8 @@ def verify_single_stage_ota(ctx):
 
 def verify_two_stage_ota(ctx):
     for pair in ctx.pairs:
+        if pair.get("cmfb_like"):
+            continue
         mirror, full = _mirror_load(ctx, pair)
         if mirror is None:
             continue
@@ -107,6 +111,8 @@ def verify_two_stage_ota(ctx):
 
 def verify_folded_cascode_ota(ctx):
     for pair in ctx.pairs:
+        if pair.get("cmfb_like"):
+            continue
         outs = set(pair["outputs"])
         cascodes = [d for d in ctx.transistors
                     if ctx.role(d.name) == "cascode"
@@ -140,6 +146,8 @@ def verify_folded_cascode_ota(ctx):
 def verify_telescopic_ota(ctx):
     """Same-polarity cascodes stacked directly on the pair outputs."""
     for pair in ctx.pairs:
+        if pair.get("cmfb_like"):
+            continue
         outs = set(pair["outputs"])
         cascodes = [d for d in ctx.transistors
                     if ctx.role(d.name) == "cascode"
@@ -176,7 +184,11 @@ def verify_fully_differential_ota(ctx):
     common-mode feedback."""
     if ctx.cross_coupled:
         return None  # latch loads belong to comparators/oscillators
+    cmfb_pairs = [p for p in ctx.pairs if p.get("cmfb_like")]
+    cmfb_outputs = {net for p in cmfb_pairs for net in p["outputs"]}
     for pair in ctx.pairs:
+        if pair.get("cmfb_like"):
+            continue
         outs = set(pair["outputs"])
         if any(_mirror_nets(m) & outs for m in ctx.mirrors):
             continue  # mirror load makes it single-ended
@@ -184,12 +196,23 @@ def verify_fully_differential_ota(ctx):
                for d in ctx.transistors):
             continue  # telescopic/folded territory
         loads = {}
+        cmfb_controlled = False
         for net in outs:
             for dev in ctx.transistors:
-                if drain_net(dev) == net and polarity(dev) != \
-                        pair["polarity"] and ctx.role(dev.name) in \
-                        ("current_source", "current_sink", "mirror_output"):
+                if drain_net(dev) != net or \
+                        polarity(dev) == pair["polarity"]:
+                    continue
+                role = ctx.role(dev.name)
+                if role in ("current_source", "current_sink",
+                            "mirror_output"):
                     loads[net] = dev
+                    break
+                # loads whose gates are driven by the CMFB error amp
+                # are current sources under common-mode control
+                if role in ("common_source", "amplifier") and \
+                        control_net(dev) in cmfb_outputs:
+                    loads[net] = dev
+                    cmfb_controlled = True
                     break
         if len(loads) != len(outs) or len(outs) != 2:
             continue
@@ -209,6 +232,11 @@ def verify_fully_differential_ota(ctx):
                for k in ("w", "l")):
             confidence += 0.05
             evidence.append("matched load geometry")
+        if cmfb_pairs:
+            evidence.append(
+                f"dedicated CMFB error amplifier "
+                f"{','.join(cmfb_pairs[0]['devices'])}"
+                + (" controls the loads" if cmfb_controlled else ""))
         # resistive common-mode feedback: both outputs sensed by resistors
         # into one net that gates a transistor
         resistors = [d for d in ctx.circuit.devices

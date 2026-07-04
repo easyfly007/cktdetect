@@ -160,6 +160,25 @@ def find_current_mirrors(circuit: Circuit, infos: dict) -> list:
 def find_differential_pairs(circuit: Circuit, infos: dict) -> list:
     transistors = [d for d in circuit.devices if is_transistor(d)]
 
+    # common-mode sense nets: >=2 R/C passives averaging two distinct
+    # non-rail nets into one node. A pair with exactly one such input
+    # (the other being a reference) is a CMFB error amplifier, not the
+    # main input pair (see tests/external/magical).
+    passive_neighbors = defaultdict(set)
+    for dev in circuit.devices:
+        if dev.dtype in (DeviceType.RESISTOR, DeviceType.CAPACITOR):
+            p, n = dev.terminals.get("p"), dev.terminals.get("n")
+            if p and n:
+                passive_neighbors[p].add(n)
+                passive_neighbors[n].add(p)
+
+    def cm_sense(net):
+        sensed = {o for o in passive_neighbors.get(net, ())
+                  if not _is_rail(infos, o)}
+        return len(sensed) >= 2
+
+    ports = set(circuit.ports)
+
     groups = defaultdict(list)
     for dev in transistors:
         if is_diode_connected(dev) or polarity(dev) is None:
@@ -193,6 +212,11 @@ def find_differential_pairs(circuit: Circuit, infos: dict) -> list:
         if tail_source:
             confidence += 0.15
             evidence.append(f"tail current source {tail_source}")
+        senses = [cm_sense(control_net(a)), cm_sense(control_net(b))]
+        cmfb_like = senses.count(True) == 1
+        if cmfb_like:
+            evidence.append("one input is a common-mode sense net: "
+                            "CMFB error amplifier, not the main pair")
         pairs.append({
             "type": "differential_pair",
             "polarity": pol,
@@ -201,9 +225,15 @@ def find_differential_pairs(circuit: Circuit, infos: dict) -> list:
             "outputs": [drain_net(a), drain_net(b)],
             "tail_net": tail_net,
             "tail_source": tail_source,
+            "cmfb_like": cmfb_like,
+            "port_inputs": len({control_net(a), control_net(b)} & ports),
             "confidence": round(confidence, 3),
             "evidence": evidence,
         })
+    # main-amplifier candidates first: unflagged pairs, port-connected
+    # inputs preferred
+    pairs.sort(key=lambda p: (p["cmfb_like"], -p["port_inputs"],
+                              p["tail_net"]))
     return pairs
 
 

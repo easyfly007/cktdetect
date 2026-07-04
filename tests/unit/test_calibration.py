@@ -27,6 +27,7 @@ _INTERNAL = {
     "folded_cascode_ota.sp": "folded_cascode_ota",
     "telescopic_ota.sp": "telescopic_ota",
     "fd_ota_cmfb.sp": "fully_differential_ota",
+    "fd_ota_cmfb_amp.sp": "fully_differential_ota",
     "latch_comparator.sp": "comparator",
     "strongarm_comparator.sp": "strongarm_comparator",
     "source_follower.sp": "buffer",
@@ -77,9 +78,9 @@ _MAGICAL = {
     "comp.sp": ("comparator_pre_amp_2018_modify_test_flow",
                 "strongarm_comparator"),
     "ota1.sp": ("core_test_flow", "fully_differential_ota"),
-    "ota2.sp": ("ota_2", "single_stage_ota"),
+    "ota2.sp": ("ota_2", "rail_to_rail_input_stage"),
     "Telescopic_Three_stage_flow.sp": ("telescopic_three_stage_flow",
-                                       "two_stage_ota"),
+                                       "telescopic_ota"),
 }
 
 _OPENFASOC = {

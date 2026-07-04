@@ -80,12 +80,16 @@
 |---|---|---|---|
 | comp.sp | 预放大动态比较器（含 dummy 管） | `strongarm_comparator` (0.9) | ✅ 正确 |
 | ota1.sp | 全差分两级 Miller OTA | `fully_differential_ota` (0.85) | ✅ 正确（FD 家族与结构对；级数细分未做） |
-| ota2.sp | 前馈补偿多级 FD OTA | `single_stage_ota` (0.9) | ⚠️ 部分正确：判中的 pair 实为 CMFB 误差放大器——**FD 多级 OTA 的 CMFB 支路会被当成主放大器**，已知缺口 |
-| Telescopic_Three_stage_flow.sp | 三级套筒 FD OTA | `two_stage_ota` (0.85) | ⚠️ 部分正确：同上（放大器家族对，级数与差分性粗略） |
+| ota2.sp | 前馈补偿多级 FD OTA（互补输入对） | `rail_to_rail_input_stage` (0.85) | ✅ 结构正确：nch+pch 互补输入对共享 vim/vip 确为其输入级结构（多级细分待做）。CMFB 修复前曾误判 `single_stage_ota`（把 CMFB 支路当主放大器） |
+| Telescopic_Three_stage_flow.sp | 三级套筒 FD OTA | `telescopic_ota` (0.8) | ✅ 结构正确：基于真正的主对（INM/INP），第一级确为 telescopic（级数细分待做）。CMFB 修复前曾误判 `two_stage_ota` |
 | CTDSM_TOP.sp | ΔΣ 调制器顶层 | 未入库 | 混方言（dot/无 dot subckt 混用）+ 52 处数字标准单元，待混方言支持后加入 |
 
 ## 三个数据集合计
 
-21 个入库第三方电路：**17 个正确标注、2 个部分正确（FD 多级 OTA
-的 CMFB 支路误当主放大器——最高优先级已知缺口）、2 个合理拒判、
-0 个完全误判**。
+21 个入库第三方电路：**19 个正确标注（其中 2 个为"结构正确、多级
+细分粒度待做"）、2 个合理拒判、0 个误判**。
+
+CMFB 缺口已修复：差分对现在带 `cmfb_like` 标记（单侧 CM 感知输入 +
+参考输入），主放大器 verifier 跳过 CMFB 对，全差分 verifier 反过来
+把它作为证据并接受 CMFB 控制的负载（内部陷阱基准
+`fd_ota_cmfb_amp.sp` 固化该行为）。
