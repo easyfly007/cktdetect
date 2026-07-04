@@ -241,6 +241,7 @@ cktdetect design.spice --pdk-profile profiles/sky130.json
 |---|---|---|
 | `pll` | 振荡器块 + 鉴相/电荷泵块 + 环路滤波块闭合成控制环（三段共享网互不相同），外部参考输入加分 | 0.80–0.85 |
 | `flash_adc` | ≥3 个比较器类实例 + 电阻梯抽头分别接不同比较器 + 比较器共享输入网 | 0.85–0.90 |
+| `vco_stage_chain` | ≥3 个同 subckt 压控反相级实例连成**开链**（闭链是环振，由平坦级规则处理），全体共享非轨控制网（区别于普通 buffer 链），链端开放/出端口 | 0.80 |
 
 ### 特殊输出
 
@@ -301,8 +302,9 @@ cktdetect a.sp --diff b.sp -o diff.json
 
 - **明确输出 unknown**：数字标准单元（范围外——反相器会被内部识别，
   用于环形振荡器检测和防误报，但纯逻辑链仍输出 unknown）、
-  translinear 环路、在 subckt 外闭环的开环级链。SC 电路整体可识别
-  （`switched_capacitor_circuit`），但滤波器/积分器子类型未细分。
+  translinear 环路。SC 电路整体可识别（`switched_capacitor_circuit`）
+  但滤波器/积分器子类型未细分；开环 VCO 级链可识别
+  （`vco_stage_chain`）但要求级为 subckt 实例形式。
 - **归一化说明**：并联同构 MOS 自动合并（m 累加）；同栅串联栈自动
   合并（L 相加，真实 PDK 里拆分的长沟道管）；经 cascode 的复合
   diode 镜像（cascoded mirror）可识别，记录为 `variant: cascode`。

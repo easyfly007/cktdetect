@@ -10,13 +10,15 @@ array of comparator instances sharing an input.
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 
 from ..ir.device import DeviceType
 
 _OSC_TYPES = {"lc_vco", "ring_oscillator"}
 _COMPARATOR_TYPES = {"comparator", "strongarm_comparator"}
 _PASSIVE_PREFIXES = ("passive_filter", "resistive_")
+_INVERTING_STAGE_TYPES = {"class_ab_output_stage",
+                          "common_source_amplifier"}
 
 
 def _blocks(circuit, subckt_analysis) -> list:
@@ -40,7 +42,8 @@ def classify_system(circuit, subckt_analysis, rails) -> list:
     if len(blocks) < 2:
         return []
     verdicts = []
-    for verifier in (verify_pll, verify_flash_adc):
+    for verifier in (verify_pll, verify_flash_adc,
+                     verify_vco_stage_chain):
         verdict = verifier(circuit, blocks, rails)
         if verdict is not None:
             verdicts.append(verdict)
@@ -97,6 +100,72 @@ def verify_pll(circuit, blocks, rails):
                                     f"'{reference[0]}'")
                 return {"type": "pll", "confidence": round(confidence, 3),
                         "evidence": evidence}
+    return None
+
+
+def verify_vco_stage_chain(circuit, blocks, rails):
+    """Open chain of identical voltage-controlled inverting stages.
+
+    A closed chain is a ring oscillator (caught at flat level); an OPEN
+    chain whose ends leave through ports is a VCO delay chain closed
+    externally. The all-instances-shared control net (frequency tuning)
+    is what distinguishes it from a plain buffer/clock chain.
+    """
+    by_subckt = defaultdict(list)
+    for block in blocks:
+        by_subckt[block["subckt"]].append(block)
+    ports = set(circuit.ports)
+
+    for subckt, stages in sorted(by_subckt.items()):
+        if len(stages) < 3:
+            continue
+        if stages[0]["type"] not in _INVERTING_STAGE_TYPES:
+            continue
+        control = set.intersection(*[b["nets"] for b in stages]) - rails
+        if not control:
+            continue  # no shared tuning input: a buffer chain, not a VCO
+
+        net_count = Counter()
+        for block in stages:
+            for net in block["nets"] - rails - control:
+                net_count[net] += 1
+        links = {n for n, count in net_count.items() if count == 2}
+        free = {n for n, count in net_count.items() if count == 1}
+
+        adjacency = defaultdict(set)
+        for net in links:
+            members = [b["instance"] for b in stages if net in b["nets"]]
+            adjacency[members[0]].add(members[1])
+            adjacency[members[1]].add(members[0])
+        degrees = {b["instance"]: len(adjacency[b["instance"]])
+                   for b in stages}
+        ends = [i for i, deg in degrees.items() if deg == 1]
+        if len(ends) != 2 or any(deg != 2 for i, deg in degrees.items()
+                                 if i not in ends):
+            continue  # not a simple open path (cycles are rings)
+        seen, frontier = {ends[0]}, ends[0]
+        while True:
+            step = [i for i in adjacency[frontier] if i not in seen]
+            if not step:
+                break
+            frontier = step[0]
+            seen.add(frontier)
+        if len(seen) != len(stages):
+            continue
+        if len(free) < 2 or (ports and len(free & ports) < 2):
+            continue  # ends must be open (externally closable)
+
+        tune = sorted(control)[0]
+        evidence = [
+            f"{len(stages)} identical inverting stages "
+            f"({subckt}, classified {stages[0]['type']}) chained "
+            f"input-to-output",
+            f"shared frequency-control net '{tune}' on every stage",
+            f"chain ends {','.join(sorted(free)[:2])} leave the scope: "
+            f"the loop closes externally",
+        ]
+        return {"type": "vco_stage_chain", "confidence": 0.8,
+                "evidence": evidence}
     return None
 
 

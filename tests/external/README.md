@@ -29,16 +29,15 @@
 | ring_oscillator | `ring_oscillator` (0.9) | ✅ 正确（电流饥饿型级，净级反相环检测） |
 | switched_capacitor_filter | `switched_capacitor_circuit` (0.85) | ✅ 正确（内嵌 telescopic OTA 作为次级结论保留） |
 | cascode_current_mirror_ota | `single_stage_ota` (0.8) | ✅ 正确（复合 diode 镜像负载——经串联栈归一化 + cascoded mirror 检测修复） |
+| VCO_type2_65 | `vco_stage_chain` (0.8) | ✅ 正确（8 级压控反相级开环链，环在 subckt 外闭合——块组合级识别） |
 | buffer | `unknown` | ✅ 合理拒判（两级数字反相器 buffer，数字范围外） |
-| VCO_type2_65 | `unknown` | ⚠️ 已知缺口：8 级堆叠反相器开环链（环在 subckt 外闭合） |
 
-**结论：10/12 正确标注，2 个 unknown（1 个范围外拒判 + 1 个已知缺口），
-0 个误判**——符合"高 precision、允许 unknown"的设计原则。
+**结论：11/12 正确标注，1 个合理拒判，0 个误判**——符合
+"高 precision、允许 unknown"的设计原则。
 
-已知缺口（开环级链识别）修复后应把对应行的期望翻转
-（`tests/unit/test_external.py` 会在行为变化时报警）。
-历史记录：首轮验证为 9/12（cascode_current_mirror_ota 曾是缺口，
-由串联栈归一化补上）。
+历史记录：首轮验证为 9/12；cascode_current_mirror_ota 缺口由串联栈
+归一化补上，VCO_type2_65 缺口由开环级链（vco_stage_chain）识别补上。
+`tests/unit/test_external.py` 固化全部期望，行为变化时报警。
 
 ## openfasoc/ — OpenFASOC 生成器电路（SKY130）
 
@@ -66,5 +65,5 @@
 
 ## 两个数据集合计
 
-17 个第三方电路：**14 个正确标注、3 个 unknown（2 个合理拒判 +
-1 个已知缺口）、0 个误判**。
+17 个第三方电路：**15 个正确标注、2 个合理拒判、0 个误判、
+0 个遗留缺口**。

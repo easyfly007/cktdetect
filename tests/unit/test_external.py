@@ -31,9 +31,10 @@ EXPECTED = {
     "switched_capacitor_filter": "switched_capacitor_circuit",
     "cascode_current_mirror_ota": "single_stage_ota",  # via series
     # normalization + composite-diode (cascoded) mirror detection
-    # honest rejections (see README: out of scope / known gaps)
+    "VCO_type2_65": "vco_stage_chain",  # open stage chain, closed
+    # externally: detected at the block-composition level
+    # honest rejection (digital 2x inverter buffer, out of scope)
     "buffer": "unknown",
-    "VCO_type2_65": "unknown",
 }
 
 
@@ -48,11 +49,24 @@ def test_every_align_file_has_an_expectation():
     assert stems == set(EXPECTED)
 
 
-def test_no_misjudgment_on_known_gaps():
-    # the known-gap circuit must stay unknown rather than being
-    # claimed as something else with low evidence
+def test_vco_stage_chain_evidence():
     report = build_report(ALIGN / "VCO_type2_65.sp", top="vco_type2_65")
-    assert report["classification"][0]["type"] == "unknown"
+    top = report["classification"][0]
+    assert top["type"] == "vco_stage_chain"
+    evidence = " ".join(top["evidence"])
+    assert "8 identical inverting stages" in evidence
+    assert "'vbias'" in evidence
+    assert "closes externally" in evidence
+
+
+def test_closed_hierarchical_ring_is_not_a_chain():
+    # the ALIGN ring oscillator closes its loop inside the subckt: the
+    # flat ring rule owns it, the open-chain rule must stay silent
+    report = build_report(ALIGN / "ring_oscillator.sp",
+                          top="ring_oscillator")
+    kinds = [v["type"] for v in report["classification"]]
+    assert kinds[0] == "ring_oscillator"
+    assert "vco_stage_chain" not in kinds
 
 
 def test_cascoded_mirror_ota_evidence():

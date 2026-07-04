@@ -44,6 +44,38 @@ def test_hierarchical_ota_gets_no_system_verdict():
     assert "flash_adc" not in [v["type"] for v in report["classification"]]
 
 
+def test_vco_stage_chain():
+    report = build_report(BENCH / "vco_stage_chain.sp")
+    verdicts = report["classification"]
+    assert verdicts[0]["type"] == "vco_stage_chain"
+    evidence = " ".join(verdicts[0]["evidence"])
+    assert "4 identical inverting stages" in evidence
+    assert "'vb'" in evidence
+
+
+def test_buffer_chain_without_control_net_is_not_a_vco():
+    text = """* plain buffer chain: no shared tuning input
+.subckt buf_stage vin vout vdd vss
+Mn vout vin vss vss nch W=2u L=0.1u
+Mp vout vin vdd vdd pch W=4u L=0.1u
+.ends
+X1 a b vdd 0 buf_stage
+X2 b c vdd 0 buf_stage
+X3 c d vdd 0 buf_stage
+X4 d e vdd 0 buf_stage
+Vdd vdd 0 1.2
+.end
+"""
+    import tempfile
+    from pathlib import Path as P
+    with tempfile.TemporaryDirectory() as tmp:
+        path = P(tmp) / "chain.sp"
+        path.write_text(text)
+        report = build_report(path)
+    assert "vco_stage_chain" not in [v["type"]
+                                     for v in report["classification"]]
+
+
 def test_source_less_subckt_filter_classified_via_ports():
     report = build_report(BENCH / "pll.sp", top="loop_filter")
     assert report["classification"][0]["type"] == "passive_filter_lowpass"
