@@ -8,6 +8,7 @@ from collections import Counter
 
 from .classify.context import build_context
 from .classify.engine import classify
+from .classify.system import classify_system
 from .diffcmp import diff_reports
 from .ir.device import DeviceType
 from .ir.flatten import flatten
@@ -93,6 +94,16 @@ def build_report(path, top=None, dialect="auto", template_dir=None,
         "composition": _composition(netlist),
         "warnings": netlist.warnings,
     }
+    # system-level (composition) verdicts rank above flat block-level
+    # verdicts: they describe the whole, the rest its ingredients
+    scope = netlist.subckts[top] if top else netlist.top
+    rails = {net for net, info in report["net_roles"].items()
+             if info["role"] in ("power", "ground")}
+    system = classify_system(scope, report["subckt_analysis"], rails)
+    if system:
+        flat_verdicts = [v for v in report["classification"]
+                         if v["type"] != "unknown"]
+        report["classification"] = system + flat_verdicts
     if template_dir:
         matches = TemplateLibrary(template_dir).match(flat)
         for label in reversed(matches):

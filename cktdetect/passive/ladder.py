@@ -59,7 +59,8 @@ def analyze_passive_network(circuit, infos):
     rails = {n for n, i in infos.items()
              if i.role in (NetRole.POWER, NetRole.GROUND)}
 
-    # input: the non-rail net a source drives (prefer AC sources)
+    # input: the non-rail net a source drives (prefer AC sources);
+    # source-less subckt filters fall back to their ports
     candidates = []
     for dev in circuit.devices:
         if dev.dtype not in _SOURCES:
@@ -68,6 +69,9 @@ def analyze_passive_network(circuit, infos):
         if nets:
             has_ac = "ac" in str(dev.params.get("spec", ""))
             candidates.append((0 if has_ac else 1, nets[0]))
+    if not candidates:
+        candidates = [(2, port) for port in circuit.ports
+                      if port not in rails]
     if not candidates:
         return None
     input_net = sorted(candidates)[0][1]

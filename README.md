@@ -44,7 +44,8 @@ StrongARM dynamic), buffer, current-mirror and beta-multiplier bias
 networks, LDO, bandgap core, LC VCO, ring oscillator, LNA, Gilbert
 mixer, sample-and-hold, switched-capacitor circuits, Dickson charge
 pump, R-2R ladder, passive filters (RC/LC low/high/bandpass) and
-resistive dividers.
+resistive dividers — plus composition-level recognition of systems
+built from classified blocks: PLL and flash ADC.
 
 Validated against independent third-party netlists — the [ALIGN
 benchmark suite](https://github.com/ALIGN-analoglayout/ALIGN-public)
