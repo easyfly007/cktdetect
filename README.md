@@ -43,6 +43,10 @@ dynamic), buffer, current-mirror and beta-multiplier bias networks,
 LDO, bandgap core, LC VCO, LNA, Gilbert mixer, passive filters
 (RC/LC low/high/bandpass) and resistive dividers.
 
+The authoritative list — exact output type strings, confidence ranges,
+and the benchmark netlist behind each rule — lives in
+[`SUPPORTED_TYPES.md`](SUPPORTED_TYPES.md).
+
 ## Usage
 
 ```console

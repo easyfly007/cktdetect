@@ -47,6 +47,12 @@ def test_rc_highpass():
         "passive_filter_highpass"
 
 
+def test_rlc_bandpass():
+    verdicts = classify_file("rlc_bandpass.sp")
+    assert verdicts[0]["type"] == "passive_filter_bandpass"
+    assert any("order 2" in e for e in verdicts[0]["evidence"])
+
+
 def test_resistive_divider():
     verdicts = classify_file("r_divider.sp")
     assert verdicts[0]["type"] == "resistive_divider"
