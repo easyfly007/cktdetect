@@ -125,7 +125,7 @@ BJT 同理（base 对应 gate）。角色唯一、局部可判，线性扫描完
 ### P8. 全局分析（在腿级小图上）
 
 - **级数**：signal 从输入端口沿边到输出端口的最长增益路径跳数。
-- **反馈环**：找环 + 沿环累计反相次数 → 负反馈（放大器/LDO/bandgap）或正反馈（latch/振荡器）。经电阻分压回到输入的环特别标记（LDO 特征）。
+- **反馈环**（已实现通用版，`graph/feedback.py`）：带符号有向信号图——非 diode 管栅→漏反相（含镜像复合跳变）、follower 栅→源同相、R/C 双向直通（C 跳变标记 AC 环，即 Miller 补偿）——环搜索 + 符号乘积 → negative（放大器/LDO/bandgap 调节环）或 positive（latch/振荡器再生环）。LDO 结论引用它确认调节环极性，误接成正反馈时带 WARNING（该分析上线时即抓出内部 LDO 基准的一处真实接线错误）。
 - **对称性**：栈签名相同、连接互为镜像的腿对 → 全差分结构、dummy 识别。
 - **补偿/负载电容**：跨两级的 C → Miller 补偿；接输出到地的 C → 负载；串 R 的 Miller → nulling resistor。
 - **正反馈 2-cycle**：两条腿互相驱动对方 gate → 交叉耦合核（VCO / latch）。
