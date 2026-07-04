@@ -34,16 +34,23 @@ _INSTANCE_RE = re.compile(r"^(\S+)\s*\(([^)]*)\)\s*(\S+)\s*(.*)$")
 class SpectreParser(SpiceParser):
     def parse_string(self, text: str, source: str = "<string>"):
         self._origin = source
+        self._process(text, source, top_level=True)
+        if len(self._scope) > 1:
+            self._warn(f"missing ends for subckt '{self._scope[-1].name}'")
+        self._finalize()
+        return self.netlist
+
+    def _process(self, text: str, source: str, top_level: bool = False):
+        previous = self._origin
+        self._origin = source
         for lineno, line in self._spectre_lines(text):
+            self._raw_line = line
             stripped = re.sub(r"\s*=\s*", "=", line.lower())
             try:
                 self._spectre_statement(stripped)
             except ParseError as exc:
                 self._warn(f"line {lineno}: {exc} -- skipped")
-        if len(self._scope) > 1:
-            self._warn(f"missing ends for subckt '{self._scope[-1].name}'")
-        self._finalize()
-        return self.netlist
+        self._origin = previous
 
     # ------------------------------------------------------------------
 
@@ -75,8 +82,10 @@ class SpectreParser(SpiceParser):
             self.netlist.globals.update(tokens[1:])
             return
         if head == "parameters":
+            target = (self._scope[-1].params if len(self._scope) > 1
+                      else self.netlist.params)
             for key, val in self._kv_params(tokens[1:]).items():
-                self.netlist.params[key] = val
+                target[key] = val
             return
         if head == "subckt":
             if len(tokens) < 2:
@@ -99,8 +108,18 @@ class SpectreParser(SpiceParser):
             self._register_model(tokens[1], tokens[2],
                                  self._kv_params(tokens[3:]))
             return
-        if head in ("include", "ahdl_include"):
-            self._warn(f"{head} is not expanded in v1: "
+        if head == "include":
+            raw_tokens = self._raw_line.split()
+            if len(raw_tokens) < 2:
+                self._warn("include without a file argument")
+                return
+            path = self._resolve_include_path(
+                raw_tokens[1].strip("'\""), "include")
+            if path is not None:
+                self._process_included(path, path.read_text(errors="replace"))
+            return
+        if head == "ahdl_include":
+            self._warn(f"ahdl_include is not expanded: "
                        f"{' '.join(tokens[1:])}")
             return
         self._instance(line)

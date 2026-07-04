@@ -61,6 +61,7 @@ cktdetect NETLIST [选项]
 | `--top SUBCKT` | 只分析指定 subckt（以其定义为顶层展平），而不是顶层器件 |
 | `--dialect auto\|spice\|spectre` | netlist 方言，默认 `auto` 自动检测 |
 | `--templates DIR` | 模板库目录，匹配到的模板作为最高优先级结论（见第 8 章） |
+| `--pdk-profile FILE` | PDK profile（JSON）：模型名 → 器件类型映射、电源/地网名模式（见 4.3） |
 | `--html FILE` | 额外生成自包含的 HTML 可视化报告（见第 9 章） |
 | `--diff OTHER` | 与另一个 netlist 做结构级对比，输出 diff（见第 10 章） |
 | `-o FILE` | JSON 报告写入文件（默认打印到 stdout） |
@@ -83,8 +84,19 @@ cktdetect NETLIST [选项]
 
 **标题行**：按标准 SPICE 约定，文件第一行若不能解析为语句则视为标题。
 
-**`.include`/`.lib` 不展开**（v1 限制），会产生告警；请先手工展开或
-使用已展平的 netlist。
+**`.include` / `.lib` 自动展开**：`.include file`（相对被包含文件所在
+目录解析，支持引号路径、嵌套）；`.lib 'file' section` 只引入库文件中
+对应 `.lib section … .endl` 段。循环包含和超深嵌套（>16 层）会告警
+跳过而不是死循环。文件不存在只告警，解析继续。
+
+**CDL 格式**：工业界常见的 CDL 导出可直接解析（走 SPICE 前端，`.cdl`
+扩展名自动识别）：`X… / subckt` 的斜杠分隔符、`$X=… $PINS` 等行内
+属性（自动剥除）、`*.PININFO` 等注释卡都能处理。
+
+**subckt 参数**：支持 `.subckt name a b W=2u` 默认参数、
+`X1 n1 n2 sub W=4u` 实例覆盖、subckt 作用域内的 `.param`（可引用
+subckt 参数写表达式），在展平时按"全局 → subckt 默认/局部 → 实例
+覆盖"的层级求值；实例上的 `m=` 会沿层次连乘到内部所有器件。
 
 ### 4.2 Spectre 方言
 
@@ -98,10 +110,25 @@ cktdetect NETLIST [选项]
 
 ### 4.3 MOS/BJT 极性推断
 
-优先使用 `.model` 卡（`nmos/pmos/npn/pnp`）；没有 model 卡时按模型名
-推断（`nch*/nmos*/nfet*/n* → NMOS`，`pch*/pmos*/pfet*/p* → PMOS`）。
-两者都失败时该管标为"极性未知"并告警——依赖极性的判断会降级。
-模型名不规范的 PDK 请确保 netlist 里带 `.model` 卡。
+优先级：**PDK profile**（若提供）→ `.model` 卡（`nmos/pmos/npn/pnp`）
+→ 模型名推断（`nch*/nmos*/nfet*/n* → NMOS`，`pch*/pmos*/pfet*/p* →
+PMOS`）。全部失败时该管标为"极性未知"并告警——依赖极性的判断会降级。
+
+**PDK profile**（`--pdk-profile prof.json`）用于模型名不规范、又没有
+`.model` 卡的 PDK：
+
+```json
+{
+  "models":      {"sky130_fd_pr__nfet*": "nmos",
+                  "sky130_fd_pr__pfet*": "pmos",
+                  "my_vert_pnp": "pnp"},
+  "power_nets":  ["vpwr*"],
+  "ground_nets": ["vgnd*"]
+}
+```
+
+模型名支持 glob 通配（精确匹配优先）；`power_nets`/`ground_nets` 补充
+非常规的电源/地网名模式，优先于内置启发式。
 
 ### 4.4 层次化 netlist
 
@@ -253,8 +280,7 @@ cktdetect a.sp --diff b.sp -o diff.json
   用于环形振荡器检测和防误报，但纯逻辑链仍输出 unknown）、多相
   switched-cap 滤波器（简单采样保持已支持）、translinear 环路、
   大量 pass-gate 的开关阵列。
-- `.include`/`.lib` 不展开。
-- 极性无法推断的 MOS 会降级处理（见 4.3）。
+- 极性无法推断的 MOS 会降级处理（见 4.3，可用 PDK profile 解决）。
 - 无源梯形分析要求简单梯形（每级单一串联路径），复杂多端口无源网络
   不适用。
 - 验收基于教科书风格电路；真实 PDK netlist（dummy 器件、特殊连接）
@@ -263,8 +289,9 @@ cktdetect a.sp --diff b.sp -o diff.json
 ## 12. 常见问题
 
 **Q: 报告说 `cannot infer MOS polarity`？**
-netlist 里没有 `.model` 卡且模型名不含 n/p 特征。补 `.model` 卡，或
-把模型名改成 `nch`/`pch` 风格。
+netlist 里没有 `.model` 卡且模型名不含 n/p 特征。三个办法：写一个
+PDK profile（`--pdk-profile`，推荐，见 4.3）、补 `.model` 卡、或把
+模型名改成 `nch`/`pch` 风格。
 
 **Q: 明明是 OTA 却输出 unknown？**
 按顺序检查：`net_roles` 里电源/地是否识别对（非常规轨名依赖 bulk

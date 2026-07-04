@@ -35,9 +35,9 @@ def _is_dc_driver(dev) -> bool:
     return not any(key in spec for key in _AC_SPEC_KEYWORDS)
 
 
-def classify_net_roles(circuit: Circuit) -> dict:
+def classify_net_roles(circuit: Circuit, profile=None) -> dict:
     """Return {net: NetInfo} with POWER/GROUND/BIAS/SIGNAL roles."""
-    infos = classify_nets(circuit)
+    infos = classify_nets(circuit, profile)
 
     def is_rail(net) -> bool:
         return infos[net].role in (NetRole.POWER, NetRole.GROUND)

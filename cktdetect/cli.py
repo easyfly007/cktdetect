@@ -13,13 +13,14 @@ from .ir.device import DeviceType
 from .ir.flatten import flatten
 from .parser import parse_netlist
 from .passes.normalize import merge_parallel_mos
+from .profile import load_profile
 from .templates import TemplateLibrary
 from .viewer import render_html
 
 
-def analyze(flat):
+def analyze(flat, profile=None):
     """Run the analysis pipeline on a flat circuit."""
-    ctx = build_context(flat)
+    ctx = build_context(flat, profile)
     return {
         "classification": classify(ctx),
         "net_roles": {
@@ -56,20 +57,22 @@ def _composition(netlist) -> dict:
     return dict(counts)
 
 
-def _subckt_analysis(netlist) -> dict:
+def _subckt_analysis(netlist, profile=None) -> dict:
     result = {}
     for name in netlist.subckts:
         try:
             flat = merge_parallel_mos(flatten(netlist, top=name))
-            result[name] = classify(build_context(flat))
+            result[name] = classify(build_context(flat, profile))
         except ValueError as exc:
             result[name] = [{"type": "error", "confidence": 0.0,
                              "evidence": [], "note": str(exc)}]
     return result
 
 
-def build_report(path, top=None, dialect="auto", template_dir=None) -> dict:
-    netlist = parse_netlist(path, dialect=dialect)
+def build_report(path, top=None, dialect="auto", template_dir=None,
+                 pdk_profile=None) -> dict:
+    profile = load_profile(pdk_profile) if pdk_profile else None
+    netlist = parse_netlist(path, dialect=dialect, profile=profile)
     flat = merge_parallel_mos(flatten(netlist, top=top))
     report = {
         "netlist": str(path),
@@ -84,8 +87,8 @@ def build_report(path, top=None, dialect="auto", template_dir=None) -> dict:
             "devices_by_type": dict(
                 Counter(d.dtype.value for d in flat.devices)),
         },
-        **analyze(flat),
-        "subckt_analysis": _subckt_analysis(netlist),
+        **analyze(flat, profile),
+        "subckt_analysis": _subckt_analysis(netlist, profile),
         "composition": _composition(netlist),
         "warnings": netlist.warnings,
     }
@@ -111,6 +114,9 @@ def main(argv=None) -> int:
                     default="auto", help="netlist dialect (default: auto)")
     ap.add_argument("--templates", metavar="DIR",
                     help="directory of labeled template netlists")
+    ap.add_argument("--pdk-profile", metavar="FILE",
+                    help="JSON profile mapping PDK model names to device "
+                         "types and rail net patterns")
     ap.add_argument("--html", metavar="FILE",
                     help="also write an HTML report")
     ap.add_argument("--diff", metavar="OTHER",
@@ -120,10 +126,12 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     report = build_report(args.netlist, top=args.top, dialect=args.dialect,
-                          template_dir=args.templates)
+                          template_dir=args.templates,
+                          pdk_profile=args.pdk_profile)
     if args.diff:
         other = build_report(args.diff, dialect=args.dialect,
-                             template_dir=args.templates)
+                             template_dir=args.templates,
+                             pdk_profile=args.pdk_profile)
         payload = {"a": args.netlist, "b": args.diff,
                    "diff": diff_reports(report, other)}
     else:

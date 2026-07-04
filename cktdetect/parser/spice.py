@@ -43,34 +43,113 @@ _IGNORED_CARDS = {
 
 
 class SpiceParser:
-    def __init__(self):
+    _MAX_INCLUDE_DEPTH = 16
+
+    def __init__(self, profile=None):
         self.netlist = Netlist()
+        self.profile = profile  # optional PdkProfile
         self._scope = [self.netlist.top]
         self._origin = "<string>"
+        self._raw_line = ""
+        self._base_dir = Path(".")
+        self._include_stack = []
 
     # ------------------------------------------------------------------
     # public API
 
     def parse_file(self, path) -> Netlist:
         path = Path(path)
+        self._base_dir = path.parent
         return self.parse_string(path.read_text(errors="replace"), source=str(path))
 
     def parse_string(self, text: str, source: str = "<string>") -> Netlist:
         self._origin = source
+        self._process(text, source, top_level=True)
+        if len(self._scope) > 1:
+            self._warn(f"missing .ends for subckt '{self._scope[-1].name}'")
+        self._finalize()
+        return self.netlist
+
+    def _process(self, text: str, source: str, top_level: bool = False):
+        previous = self._origin
+        self._origin = source
         for index, (lineno, line) in enumerate(self._logical_lines(text)):
+            self._raw_line = line
             stripped = re.sub(r"\s*=\s*", "=", line.lower())
             try:
                 if not self._statement(stripped):
                     break  # .end
             except ParseError as exc:
-                if index == 0 and lineno == 1 and not self.netlist.title:
+                if top_level and index == 0 and lineno == 1 and \
+                        not self.netlist.title:
                     self.netlist.title = line
                 else:
                     self._warn(f"line {lineno}: {exc} -- skipped")
-        if len(self._scope) > 1:
-            self._warn(f"missing .ends for subckt '{self._scope[-1].name}'")
-        self._finalize()
-        return self.netlist
+        self._origin = previous
+
+    # ------------------------------------------------------------------
+    # include expansion
+
+    def _resolve_include_path(self, raw: str, label: str):
+        path = Path(raw)
+        if not path.is_absolute():
+            path = self._base_dir / path
+        if not path.exists():
+            self._warn(f"{label} file not found: {raw}")
+            return None
+        resolved = str(path.resolve())
+        if resolved in self._include_stack:
+            self._warn(f"{label} cycle detected: {raw}")
+            return None
+        if len(self._include_stack) >= self._MAX_INCLUDE_DEPTH:
+            self._warn(f"{label} nesting deeper than "
+                       f"{self._MAX_INCLUDE_DEPTH}: {raw}")
+            return None
+        return path
+
+    def _process_included(self, path: Path, text: str):
+        self._include_stack.append(str(path.resolve()))
+        previous_base = self._base_dir
+        self._base_dir = path.parent
+        self._process(text, str(path))
+        self._base_dir = previous_base
+        self._include_stack.pop()
+
+    def _include(self, cmd: str, tokens: list):
+        if len(tokens) < 2:
+            self._warn(f"{cmd} without a file argument")
+            return
+        raw_tokens = self._raw_line.split()
+        raw = (raw_tokens[1] if len(raw_tokens) > 1
+               else tokens[1]).strip("'\"")
+        path = self._resolve_include_path(raw, cmd)
+        if path is None:
+            return
+        text = path.read_text(errors="replace")
+        if cmd == ".lib":
+            if len(tokens) < 3:
+                self._warn(".lib without a section name -- skipped")
+                return
+            text = self._lib_section(text, tokens[2])
+            if text is None:
+                self._warn(f".lib section '{tokens[2]}' not found in {raw}")
+                return
+        self._process_included(path, text)
+
+    @staticmethod
+    def _lib_section(text: str, section: str):
+        lines, active = [], False
+        for raw in text.splitlines():
+            low = raw.strip().lower()
+            if low.startswith(".lib"):
+                active = low.split()[1:2] == [section]
+                continue
+            if low.startswith(".endl"):
+                active = False
+                continue
+            if active:
+                lines.append(raw)
+        return "\n".join(lines) if lines else None
 
     # ------------------------------------------------------------------
     # line assembly
@@ -122,14 +201,17 @@ class SpiceParser:
                 raise ParseError("malformed .model card")
             self.netlist.models[tokens[1]] = tokens[2].split("(")[0]
         elif cmd == ".param":
+            in_subckt = len(self._scope) > 1
+            target = (self._scope[-1].params if in_subckt
+                      else self.netlist.params)
             for key, val in self._kv_params(tokens[1:]).items():
-                if not isinstance(val, (int, float)):
+                if not isinstance(val, (int, float)) and not in_subckt:
                     self._warn(f"parameter '{key}' has unresolved value '{val}'")
-                self.netlist.params[key] = val
+                target[key] = val
         elif cmd == ".global":
             self.netlist.globals.update(tokens[1:])
         elif cmd in (".include", ".inc", ".lib"):
-            self._warn(f"{cmd} is not expanded in v1: {' '.join(tokens[1:])}")
+            self._include(".lib" if cmd == ".lib" else cmd, tokens)
         elif cmd not in _IGNORED_CARDS:
             self._warn(f"unknown control card '{cmd}' ignored")
         return True
@@ -195,6 +277,11 @@ class SpiceParser:
             raise ParseError(f"'{name}' has no value or model")
         if value is not None:
             params["value"] = value
+        else:
+            # the unresolved token may be a parameter reference rather
+            # than a model name; flattening resolves it against the
+            # hierarchical parameter environment
+            params.setdefault("value", model)
         return Device(name=name, dtype=dtype,
                       terminals={"p": pos[1], "n": pos[2]},
                       model=model, params=params)
@@ -240,6 +327,7 @@ class SpiceParser:
         return self._source(name, pos, params, DeviceType.ISOURCE)
 
     def _dev_x(self, name, pos, params):
+        pos = [t for t in pos if t != "/"]  # CDL: X<nets> / <subckt>
         if len(pos) < 3:
             raise ParseError(
                 f"subckt instance '{name}' needs nodes and a subckt name")
@@ -290,6 +378,12 @@ class SpiceParser:
                     dev.dtype = self._bjt_polarity(dev)
 
     def _mos_polarity(self, dev) -> DeviceType:
+        if self.profile is not None:
+            mapped = self.profile.model_type(dev.model)
+            if mapped == "nmos":
+                return DeviceType.NMOS
+            if mapped == "pmos":
+                return DeviceType.PMOS
         mtype = self.netlist.models.get(dev.model)
         if mtype == "nmos":
             return DeviceType.NMOS
@@ -304,6 +398,12 @@ class SpiceParser:
         return DeviceType.MOS
 
     def _bjt_polarity(self, dev) -> DeviceType:
+        if self.profile is not None:
+            mapped = self.profile.model_type(dev.model)
+            if mapped == "npn":
+                return DeviceType.NPN
+            if mapped == "pnp":
+                return DeviceType.PNP
         mtype = self.netlist.models.get(dev.model)
         if mtype == "npn":
             return DeviceType.NPN

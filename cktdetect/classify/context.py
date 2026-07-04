@@ -47,8 +47,8 @@ class Context:
         return any(d.dtype is dtype for d in self.circuit.devices)
 
 
-def build_context(flat: Circuit) -> Context:
-    infos = classify_net_roles(flat)
+def build_context(flat: Circuit, profile=None) -> Context:
+    infos = classify_net_roles(flat, profile)
     branches, non_dc = decompose_branches(flat, infos)
     mirrors = find_current_mirrors(flat, infos)
     pairs = find_differential_pairs(flat, infos)

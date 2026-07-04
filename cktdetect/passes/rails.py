@@ -34,8 +34,12 @@ _POWER_NAME_RE = re.compile(r"^[ad]?(vdd|vcc|vpwr)")
 _GROUND_NAME_RE = re.compile(r"^([ad]?(gnd|vss|vgnd)|vee)")
 
 
-def classify_nets(circuit: Circuit) -> dict:
-    """Return {net: NetInfo} with rails identified."""
+def classify_nets(circuit: Circuit, profile=None) -> dict:
+    """Return {net: NetInfo} with rails identified.
+
+    ``profile`` (PdkProfile) adds user-supplied power/ground net name
+    patterns, checked before the built-in heuristics.
+    """
     infos = {net: NetInfo() for net in sorted(circuit.nets())}
 
     bulk_power = Counter()
@@ -57,11 +61,16 @@ def classify_nets(circuit: Circuit) -> dict:
         infos[net].role = role
         infos[net].evidence.append(why)
 
-    # 1. structural / name evidence
+    # 1. structural / name evidence (profile patterns take precedence)
     for net in infos:
         base = net.rsplit(".", 1)[-1].rstrip("!")
+        profile_role = profile.net_role(base) if profile else None
         if net == "0":
             promote(net, NetRole.GROUND, "node 0")
+        elif profile_role == "ground":
+            promote(net, NetRole.GROUND, f"pdk profile ground net '{base}'")
+        elif profile_role == "power":
+            promote(net, NetRole.POWER, f"pdk profile power net '{base}'")
         elif _GROUND_NAME_RE.match(base):
             promote(net, NetRole.GROUND, f"net name '{base}'")
         elif _POWER_NAME_RE.match(base):

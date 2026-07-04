@@ -58,8 +58,11 @@ cktdetect NETLIST [--top SUBCKT] [--dialect auto|spice|spectre]
           [--diff OTHER_NETLIST] [-o report.json]
 ```
 
-- **Dialects**: generic SPICE (standard / ngspice / HSPICE core) and
-  Spectre; auto-detected by content and file extension.
+- **Dialects**: generic SPICE (standard / ngspice / HSPICE core), CDL
+  exports, and Spectre; auto-detected by content and file extension.
+  `.include`/`.lib` are expanded; subckt parameters and hierarchical
+  m-factors resolve at flatten time; `--pdk-profile` maps opaque PDK
+  model names and rail-net patterns.
 - **Hierarchy**: `.subckt` designs are classified bottom-up; the report
   includes per-subckt classification and an instance composition table.
 - **Templates** (`--templates`): drop labeled reference netlists into a
