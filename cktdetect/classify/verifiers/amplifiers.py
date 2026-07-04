@@ -11,6 +11,7 @@ from ...ir.device import DeviceType
 from ...passes.families import (control_net, drain_net, polarity,
                                 source_net)
 from ...passive.ladder import r_divider_taps
+from ..stages import attach_stage_chain
 
 
 def _mirror_nets(mirror):
@@ -173,8 +174,9 @@ def verify_telescopic_ota(ctx):
                 evidence.append(f"mirror load ({mirror['reference']}) on "
                                 f"the cascode outputs")
                 break
-        return {"type": "telescopic_ota",
-                "confidence": round(confidence, 3), "evidence": evidence}
+        return attach_stage_chain(ctx, pair, {
+            "type": "telescopic_ota",
+            "confidence": round(confidence, 3), "evidence": evidence})
     return None
 
 
@@ -257,8 +259,9 @@ def verify_fully_differential_ota(ctx):
                     f"common-mode feedback: sense resistors average the "
                     f"outputs into '{cm_net}' gating {sensor.name}")
                 break
-        return {"type": "fully_differential_ota",
-                "confidence": round(confidence, 3), "evidence": evidence}
+        return attach_stage_chain(ctx, pair, {
+            "type": "fully_differential_ota",
+            "confidence": round(confidence, 3), "evidence": evidence})
     return None
 
 
@@ -369,9 +372,10 @@ def verify_rail_to_rail_input_stage(ctx):
                 evidence.append(
                     f"independent tails {pair_a['tail_source']},"
                     f"{pair_b['tail_source']}")
-            return {"type": "rail_to_rail_input_stage",
-                    "confidence": round(confidence, 3),
-                    "evidence": evidence}
+            return attach_stage_chain(ctx, pair_a, {
+                "type": "rail_to_rail_input_stage",
+                "confidence": round(confidence, 3),
+                "evidence": evidence})
     return None
 
 

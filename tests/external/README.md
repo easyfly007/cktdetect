@@ -79,9 +79,9 @@
 | netlist | 电路 | 分类结果 | 判定 |
 |---|---|---|---|
 | comp.sp | 预放大动态比较器（含 dummy 管） | `strongarm_comparator` (0.9) | ✅ 正确 |
-| ota1.sp | 全差分两级 Miller OTA | `fully_differential_ota` (0.85) | ✅ 正确（FD 家族与结构对；级数细分未做） |
-| ota2.sp | 前馈补偿多级 FD OTA（互补输入对） | `rail_to_rail_input_stage` (0.85) | ✅ 结构正确：nch+pch 互补输入对共享 vim/vip 确为其输入级结构（多级细分待做）。CMFB 修复前曾误判 `single_stage_ota`（把 CMFB 支路当主放大器） |
-| Telescopic_Three_stage_flow.sp | 三级套筒 FD OTA | `telescopic_ota` (0.8) | ✅ 结构正确：基于真正的主对（INM/INP），第一级确为 telescopic（级数细分待做）。CMFB 修复前曾误判 `two_stage_ota` |
+| ota1.sp | 全差分两级 Miller OTA | `fully_differential_ota`，**stages=2** | ✅ 正确（差分级链计到 outm/outp） |
+| ota2.sp | 前馈补偿多级 FD OTA（互补输入对） | `rail_to_rail_input_stage`，**stages=2** | ✅ 结构正确：nch+pch 互补输入对共享 vim/vip，级链计到 vom/vop。CMFB 修复前曾误判 `single_stage_ota` |
+| Telescopic_Three_stage_flow.sp | 三级套筒 FD OTA | `telescopic_ota`，**stages=3** | ✅ 正确：主对（INM/INP）+ telescopic 第一级 + 级链数出 3 级直达 OUTM/OUTP，与命名吻合。CMFB 修复前曾误判 `two_stage_ota` |
 | CTDSM_TOP.sp | ΔΣ 调制器顶层 | 未入库 | 混方言（dot/无 dot subckt 混用）+ 52 处数字标准单元，待混方言支持后加入 |
 
 ## 三个数据集合计

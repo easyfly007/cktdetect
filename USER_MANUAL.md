@@ -151,7 +151,7 @@ cktdetect design.spice --pdk-profile profiles/sky130.json
 
 | 字段 | 内容 |
 |---|---|
-| `classification` | 电路类型结论列表；每项含 `type`、`scope`（`system`/`block`/`template`）、`confidence`、`evidence`。系统级与模板结论排在块级之前，层内按置信度降序。无结论时为单个 `unknown` |
+| `classification` | 电路类型结论列表；每项含 `type`、`scope`（`system`/`block`/`template`）、`confidence`、`evidence`；差分放大器类结论另带 `stages`（沿差分信号路径从主对数到输出的增益级数，多级时证据列出级链）。系统级与模板结论排在块级之前，层内按置信度降序。无结论时为单个 `unknown` |
 | `net_roles` | 每个 net 的角色：`power` / `ground` / `bias` / `signal`，附证据 |
 | `device_roles` | 每个晶体管的角色（见 5.1），附证据 |
 | `structures` | 识别出的结构：电流镜（reference/outputs/电流比例、`variant` simple/cascode）、差分对（inputs/outputs/tail、`cmfb_like` 标记——单侧输入是 R/C 平均两个非轨网的 CM 感知网时判为 CMFB 误差放大器，不会被当成主放大器） |
