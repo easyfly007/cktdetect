@@ -25,9 +25,10 @@ EXPECTED = {
     "double_tail_sense_amplifier": "comparator",
     "ring_oscillator": "ring_oscillator",
     "switched_capacitor_filter": "switched_capacitor_circuit",
+    "cascode_current_mirror_ota": "single_stage_ota",  # via series
+    # normalization + composite-diode (cascoded) mirror detection
     # honest rejections (see README: out of scope / known gaps)
     "buffer": "unknown",
-    "cascode_current_mirror_ota": "unknown",
     "VCO_type2_65": "unknown",
 }
 
@@ -44,12 +45,21 @@ def test_every_align_file_has_an_expectation():
 
 
 def test_no_misjudgment_on_known_gaps():
-    # the two known-gap circuits must stay unknown rather than being
+    # the known-gap circuit must stay unknown rather than being
     # claimed as something else with low evidence
-    for stem in ("cascode_current_mirror_ota", "VCO_type2_65"):
-        report = build_report(ALIGN / f"{stem}.sp", top=stem.lower())
-        top = report["classification"][0]
-        assert top["type"] == "unknown", (stem, top)
+    report = build_report(ALIGN / "VCO_type2_65.sp", top="vco_type2_65")
+    assert report["classification"][0]["type"] == "unknown"
+
+
+def test_cascoded_mirror_ota_evidence():
+    report = build_report(ALIGN / "cascode_current_mirror_ota.sp",
+                          top="cascode_current_mirror_ota")
+    top = report["classification"][0]
+    assert top["type"] == "single_stage_ota"
+    mirrors = [s for s in report["structures"]
+               if s["type"] == "current_mirror"
+               and s.get("variant") == "cascode"]
+    assert mirrors, "composite-diode mirrors should be reported"
 
 
 def test_sc_filter_keeps_embedded_ota_as_secondary():

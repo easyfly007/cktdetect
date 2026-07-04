@@ -279,9 +279,11 @@ cktdetect a.sp --diff b.sp -o diff.json
 
 - **明确输出 unknown**：数字标准单元（范围外——反相器会被内部识别，
   用于环形振荡器检测和防误报，但纯逻辑链仍输出 unknown）、
-  translinear 环路、复合 diode（经 cascode 的镜像 diode 连接，
-  待串联栈归一化）、在 subckt 外闭环的开环级链。SC 电路整体可识别
+  translinear 环路、在 subckt 外闭环的开环级链。SC 电路整体可识别
   （`switched_capacitor_circuit`），但滤波器/积分器子类型未细分。
+- **归一化说明**：并联同构 MOS 自动合并（m 累加）；同栅串联栈自动
+  合并（L 相加，真实 PDK 里拆分的长沟道管）；经 cascode 的复合
+  diode 镜像（cascoded mirror）可识别，记录为 `variant: cascode`。
 - 极性无法推断的 MOS 会降级处理（见 4.3，可用 PDK profile 解决）。
 - 无源梯形分析要求简单梯形（每级单一串联路径），复杂多端口无源网络
   不适用。

@@ -13,14 +13,18 @@ from ...passes.families import (control_net, drain_net, polarity,
 from ...passive.ladder import r_divider_taps
 
 
+def _mirror_nets(mirror):
+    return {mirror["ref_drain_net"]} | {o["drain_net"]
+                                        for o in mirror["outputs"]}
+
+
 def _mirror_load(ctx, pair):
     """Opposite-polarity mirror whose drains sit on the pair outputs."""
     pair_outs = set(pair["outputs"])
     for mirror in ctx.mirrors:
         if mirror["polarity"] == pair["polarity"]:
             continue
-        ref = ctx.circuit.device(mirror["reference"])
-        nets = {drain_net(ref)} | {o["drain_net"] for o in mirror["outputs"]}
+        nets = _mirror_nets(mirror)
         if nets & pair_outs:
             return mirror, nets <= pair_outs
     return None, False
@@ -156,10 +160,7 @@ def verify_telescopic_ota(ctx):
         for mirror in ctx.mirrors:
             if mirror["polarity"] == pair["polarity"]:
                 continue
-            ref = ctx.circuit.device(mirror["reference"])
-            nets = {drain_net(ref)} | {o["drain_net"]
-                                       for o in mirror["outputs"]}
-            if nets & casc_outs:
+            if _mirror_nets(mirror) & casc_outs:
                 confidence += 0.1
                 evidence.append(f"mirror load ({mirror['reference']}) on "
                                 f"the cascode outputs")
@@ -177,16 +178,8 @@ def verify_fully_differential_ota(ctx):
         return None  # latch loads belong to comparators/oscillators
     for pair in ctx.pairs:
         outs = set(pair["outputs"])
-        mirror_hit = False
-        for mirror in ctx.mirrors:
-            ref = ctx.circuit.device(mirror["reference"])
-            nets = {drain_net(ref)} | {o["drain_net"]
-                                       for o in mirror["outputs"]}
-            if nets & outs:
-                mirror_hit = True
-                break
-        if mirror_hit:
-            continue
+        if any(_mirror_nets(m) & outs for m in ctx.mirrors):
+            continue  # mirror load makes it single-ended
         if any(ctx.role(d.name) == "cascode" and source_net(d) in outs
                for d in ctx.transistors):
             continue  # telescopic/folded territory
@@ -358,7 +351,11 @@ def verify_class_ab_output_stage(ctx):
     """Complementary push-pull pair with distinct signal drives."""
     if ctx.pairs:
         return None  # amplifier verifiers own circuits with input pairs
-    for n_dev, p_dev in _push_pull_pairs(ctx):
+    push_pull = _push_pull_pairs(ctx)
+    if len(push_pull) != 1:
+        return None  # several push-pull pairs form a stage array, not
+        # one output stage (e.g. stacked-inverter VCO chains)
+    for n_dev, p_dev in push_pull:
         if control_net(n_dev) == control_net(p_dev):
             continue  # shared gate is a logic inverter, out of scope
         out = drain_net(n_dev)

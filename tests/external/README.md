@@ -28,13 +28,14 @@
 | double_tail_sense_amplifier | `comparator` (0.8) | ✅ 正确（double-tail 动态比较器，判入比较器家族；两级动态子类型未细分） |
 | ring_oscillator | `ring_oscillator` (0.9) | ✅ 正确（电流饥饿型级，净级反相环检测） |
 | switched_capacitor_filter | `switched_capacitor_circuit` (0.85) | ✅ 正确（内嵌 telescopic OTA 作为次级结论保留） |
+| cascode_current_mirror_ota | `single_stage_ota` (0.8) | ✅ 正确（复合 diode 镜像负载——经串联栈归一化 + cascoded mirror 检测修复） |
 | buffer | `unknown` | ✅ 合理拒判（两级数字反相器 buffer，数字范围外） |
-| cascode_current_mirror_ota | `unknown` | ⚠️ 已知缺口：镜像的 diode 连接经过 cascode（复合 diode），需要串联栈归一化 |
 | VCO_type2_65 | `unknown` | ⚠️ 已知缺口：8 级堆叠反相器开环链（环在 subckt 外闭合） |
 
-**结论：9/12 正确标注，3 个 unknown（1 个范围外拒判 + 2 个已知缺口），
+**结论：10/12 正确标注，2 个 unknown（1 个范围外拒判 + 1 个已知缺口），
 0 个误判**——符合"高 precision、允许 unknown"的设计原则。
 
-已知缺口对应 DESIGN.md 路线图中的"串联栈归一化"与开环级链识别；
-修复后应把上表对应行的期望翻转（`tests/unit/test_external.py`
-会在行为变化时报警）。
+已知缺口（开环级链识别）修复后应把对应行的期望翻转
+（`tests/unit/test_external.py` 会在行为变化时报警）。
+历史记录：首轮验证为 9/12（cascode_current_mirror_ota 曾是缺口，
+由串联栈归一化补上）。

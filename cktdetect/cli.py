@@ -12,7 +12,7 @@ from .diffcmp import diff_reports
 from .ir.device import DeviceType
 from .ir.flatten import flatten
 from .parser import parse_netlist
-from .passes.normalize import merge_parallel_mos
+from .passes.normalize import merge_parallel_mos, merge_series_mos
 from .profile import load_profile
 from .templates import TemplateLibrary
 from .viewer import render_html
@@ -61,7 +61,8 @@ def _subckt_analysis(netlist, profile=None) -> dict:
     result = {}
     for name in netlist.subckts:
         try:
-            flat = merge_parallel_mos(flatten(netlist, top=name))
+            flat = merge_series_mos(merge_parallel_mos(
+                flatten(netlist, top=name)))
             result[name] = classify(build_context(flat, profile))
         except ValueError as exc:
             result[name] = [{"type": "error", "confidence": 0.0,
@@ -73,7 +74,7 @@ def build_report(path, top=None, dialect="auto", template_dir=None,
                  pdk_profile=None) -> dict:
     profile = load_profile(pdk_profile) if pdk_profile else None
     netlist = parse_netlist(path, dialect=dialect, profile=profile)
-    flat = merge_parallel_mos(flatten(netlist, top=top))
+    flat = merge_series_mos(merge_parallel_mos(flatten(netlist, top=top)))
     report = {
         "netlist": str(path),
         "title": netlist.title,
