@@ -50,6 +50,8 @@ def classify(ctx: Context) -> list:
     verdicts.sort(key=lambda v: -v["confidence"])
     accepted = [v for v in verdicts if v["confidence"] >= THRESHOLD]
     if not accepted:
-        return [{"type": "unknown", "confidence": 0.0,
+        return [{"type": "unknown", "scope": "block", "confidence": 0.0,
                  "evidence": [], "note": "no circuit-type verifier matched"}]
+    for verdict in accepted:
+        verdict.setdefault("scope", "block")
     return accepted

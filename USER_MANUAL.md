@@ -151,7 +151,7 @@ cktdetect design.spice --pdk-profile profiles/sky130.json
 
 | 字段 | 内容 |
 |---|---|
-| `classification` | 电路类型结论列表，按置信度降序；每项含 `type`、`confidence`、`evidence`。无结论时为单个 `unknown` |
+| `classification` | 电路类型结论列表；每项含 `type`、`scope`（`system`/`block`/`template`）、`confidence`、`evidence`。系统级与模板结论排在块级之前，层内按置信度降序。无结论时为单个 `unknown` |
 | `net_roles` | 每个 net 的角色：`power` / `ground` / `bias` / `signal`，附证据 |
 | `device_roles` | 每个晶体管的角色（见 5.1），附证据 |
 | `structures` | 识别出的结构：电流镜（reference/outputs/电流比例）、差分对（inputs/outputs/tail） |
@@ -211,7 +211,7 @@ cktdetect design.spice --pdk-profile profiles/sky130.json
 
 | `type` 输出 | 电路 | 置信度 |
 |---|---|---|
-| `lc_vco` | LC 振荡器（交叉耦合负阻 + tank） | 0.85–0.90 |
+| `lc_vco` | LC 振荡器（交叉耦合负阻 + tank；纯电感 tank 形态取下限） | 0.80–0.90 |
 | `ring_oscillator` | 环形振荡器（奇数级反相器闭环） | 0.85–0.90 |
 | `lna` | 低噪放（源极电感退化 + 栅匹配 + cascode） | 0.75–0.95 |
 | `gilbert_mixer` | Gilbert 混频器（三层栈交叉连接开关四管） | 0.85–0.90 |
@@ -252,6 +252,26 @@ cktdetect design.spice --pdk-profile profiles/sky130.json
 
 每种类型在 `tests/benchmarks/` 都有对应的基准 netlist（正例与反例），
 可作为格式参考。
+
+## 6.1 置信度语义与校准
+
+置信度是规则证据的加权和，**不是概率**，其分层语义：
+
+| 区间 | 含义 |
+|---|---|
+| < 0.60 | 拒判（不会作为结论输出，阈值） |
+| 0.60–0.74 | Required 结构成立，但可选证据少——结构存在，定型谨慎 |
+| 0.75–0.89 | Required + 多数 Optional 证据 |
+| 0.90–0.95 | 完整证据链；**0.95 是规则结论的上限** |
+| 0.97 | 仅保留给模板图同构匹配 |
+
+**校准**：全部带标签语料（内部基准 + ALIGN + OpenFASOC 共 51 个
+可判电路）定期跑校准 harness（`pytest tests/unit/test_calibration.py
+-s` 打印逐类型实测表），固化四条不变量：top-1 全部正确、无低于
+阈值/超上限的结论、每种类型的实测置信度落在本手册声明的区间内、
+排序边际非负（系统级与块级分层比较）。新增 verifier 时：base 只由
+Required 决定，每条 Optional 证据 +0.05~0.15，总和不越 0.95，并把
+类型区间同步登记到手册与校准表。
 
 ## 7. 多个结论怎么读
 

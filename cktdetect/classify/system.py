@@ -98,7 +98,8 @@ def verify_pll(circuit, blocks, rails):
                     confidence += 0.05
                     evidence.append(f"external reference input "
                                     f"'{reference[0]}'")
-                return {"type": "pll", "confidence": round(confidence, 3),
+                return {"type": "pll", "scope": "system",
+                        "confidence": round(confidence, 3),
                         "evidence": evidence}
     return None
 
@@ -164,8 +165,8 @@ def verify_vco_stage_chain(circuit, blocks, rails):
             f"chain ends {','.join(sorted(free)[:2])} leave the scope: "
             f"the loop closes externally",
         ]
-        return {"type": "vco_stage_chain", "confidence": 0.8,
-                "evidence": evidence}
+        return {"type": "vco_stage_chain", "scope": "system",
+                "confidence": 0.8, "evidence": evidence}
     return None
 
 
@@ -211,5 +212,5 @@ def verify_flash_adc(circuit, blocks, rails):
     if len(set(tapped.values())) >= len(comparators):
         confidence += 0.05
         evidence.append("every comparator has its own ladder tap")
-    return {"type": "flash_adc", "confidence": round(confidence, 3),
-            "evidence": evidence}
+    return {"type": "flash_adc", "scope": "system",
+            "confidence": round(confidence, 3), "evidence": evidence}

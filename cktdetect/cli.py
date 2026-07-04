@@ -108,7 +108,8 @@ def build_report(path, top=None, dialect="auto", template_dir=None,
         matches = TemplateLibrary(template_dir).match(flat)
         for label in reversed(matches):
             report["classification"].insert(0, {
-                "type": f"template:{label}", "confidence": 0.97,
+                "type": f"template:{label}", "scope": "template",
+                "confidence": 0.97,
                 "evidence": ["graph-isomorphic to template netlist"],
             })
     return report

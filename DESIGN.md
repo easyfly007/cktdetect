@@ -143,6 +143,11 @@ score = base(所有 Required 通过) + Σ w_i · Optional_i    （任一 Forbidd
 
 全部 verifier 未过阈值 → `UNKNOWN`（附最接近的候选与缺失的证据，方便人工复核）。
 
+**置信度政策**（经全语料校准 harness 固化，见 `cktdetect/calibration.py`）：
+阈值 0.6；规则结论上限 0.95，模板匹配 0.97；结论带 `scope` 层级
+（system/block/template），跨层排序按层级、层内按置信度；每种类型的
+实测置信度区间必须落在用户手册声明区间内（测试强制）。
+
 ### P10. 输出
 
 ```json
