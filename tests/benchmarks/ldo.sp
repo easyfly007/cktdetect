@@ -1,9 +1,11 @@
 * simple pmos ldo: 5t error amp + pass device + resistive feedback
+* fb enters the mirror-side input (m1) so the regulation loop is
+* negative: fb^ -> i(m1)^ -> mirror -> na^ -> pmos weaker -> vout v
 Vdd vdd 0 3.3
 Vref vref 0 1.2
 Vb nb 0 0.7
-M1 n1 vref tail 0 nch W=4u L=0.5u
-M2 na fb tail 0 nch W=4u L=0.5u
+M1 n1 fb tail 0 nch W=4u L=0.5u
+M2 na vref tail 0 nch W=4u L=0.5u
 M3 n1 n1 vdd vdd pch W=8u L=1u
 M4 na n1 vdd vdd pch W=8u L=1u
 M5 tail nb 0 0 nch W=2u L=2u

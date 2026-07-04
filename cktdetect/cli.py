@@ -37,6 +37,7 @@ def analyze(flat, profile=None):
         "device_roles": ctx.roles,
         "structures": ctx.mirrors + ctx.pairs,
         "cross_coupled": ctx.cross_coupled,
+        "feedback_loops": ctx.feedback_loops,
         "tanks": ctx.tanks,
         "stage_edges": ctx.stage_edges,
     }

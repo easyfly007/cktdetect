@@ -156,6 +156,7 @@ cktdetect design.spice --pdk-profile profiles/sky130.json
 | `device_roles` | 每个晶体管的角色（见 5.1），附证据 |
 | `structures` | 识别出的结构：电流镜（reference/outputs/电流比例）、差分对（inputs/outputs/tail） |
 | `cross_coupled` | 交叉耦合对（正反馈 2-cycle） |
+| `feedback_loops` | 通用反馈环分析：带符号信号图（栅→漏反相、follower 同相、R/C 直通）上的环，标注 `polarity`（negative/positive）与 `ac`（含电容跳变，如 Miller 补偿）。LDO 结论会引用它确认调节环极性——**误接成正反馈时输出 WARNING** |
 | `tanks` | LC 谐振腔（`parallel` / `differential` / `single_ended` 三种形态） |
 | `branches` | DC 支路分解：每条"腿"的器件栈、所触电源轨、内部网、分叉网 |
 | `stage_edges` | 腿级信号流边（drain→gate 直连或经电容 AC 耦合，含反相极性） |

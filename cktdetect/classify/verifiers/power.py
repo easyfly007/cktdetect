@@ -44,6 +44,18 @@ def verify_ldo(ctx):
                    for d in ctx.circuit.devices):
                 confidence += 0.05
                 evidence.append(f"output capacitor on '{vout}'")
+            loop = next((l for l in ctx.feedback_loops
+                         if vout in l["nets"] and tap in l["nets"]
+                         and not l["ac"]), None)
+            if loop:
+                evidence.append(
+                    f"loop polarity analysis: {loop['polarity']} dc "
+                    f"feedback through {','.join(loop['devices'])}")
+                if loop["polarity"] == "positive":
+                    evidence.append(
+                        "WARNING: the regulation loop analyzes as "
+                        "positive feedback -- check the error-amp "
+                        "input wiring")
             return {"type": "ldo", "confidence": round(confidence, 3),
                     "evidence": evidence}
     return None
