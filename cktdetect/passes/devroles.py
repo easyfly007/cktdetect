@@ -3,11 +3,14 @@
 A transistor's role follows from where its control terminal connects
 (rail / bias / signal net) and its position in the branch stack. Roles
 are unique per device, so there is no motif-overlap conflict to resolve.
+
+All group lookups are pre-indexed so the pass stays linear on large
+flattened designs (validated on a 20k-device DC-DC converter).
 """
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 from ..ir.circuit import Circuit
 from .families import (control_net, drain_net, is_diode_connected,
@@ -23,17 +26,30 @@ def assign_device_roles(circuit: Circuit, infos: dict) -> dict:
 
     transistors = [d for d in circuit.devices if is_transistor(d)]
 
-    drain_map = defaultdict(list)
+    # devices draining into a net, by polarity (for cascode detection)
+    drain_pol_count = Counter()
+    drain_first = {}
     for dev in transistors:
-        drain_map[drain_net(dev)].append(dev)
+        key = (drain_net(dev), polarity(dev))
+        drain_pol_count[key] += 1
+        drain_first.setdefault(key, dev.name)
 
-    # signal-gated transistors grouped by their source net (fork candidates)
-    source_groups = defaultdict(list)
+    # signal-gated, non-diode transistors grouped by source net
+    # (fork candidates); counted per gate so peer checks are O(1)
+    group_count = Counter()
+    group_gate_count = Counter()
+    group_samples = defaultdict(list)
     for dev in transistors:
         if is_diode_connected(dev):
             continue
-        if role_of(control_net(dev)) is NetRole.SIGNAL:
-            source_groups[source_net(dev)].append(dev)
+        gate = control_net(dev)
+        if role_of(gate) is not NetRole.SIGNAL:
+            continue
+        key = (source_net(dev), polarity(dev))
+        group_count[key] += 1
+        group_gate_count[(key, gate)] += 1
+        if len(group_samples[key]) < 4:
+            group_samples[key].append(dev.name)
 
     roles = {}
     for dev in transistors:
@@ -46,19 +62,18 @@ def assign_device_roles(circuit: Circuit, infos: dict) -> dict:
             role = "diode"
             evidence = ["control terminal tied to drain"]
         elif role_of(gate) is NetRole.BIAS:
+            stacked_below = (drain_pol_count[(source, pol)]
+                             - (1 if drain == source else 0))
             if pol == "n" and role_of(source) is NetRole.GROUND:
                 role = "current_sink"
                 evidence = [f"bias-gated ('{gate}'), source on ground"]
             elif pol == "p" and role_of(source) is NetRole.POWER:
                 role = "current_source"
                 evidence = [f"bias-gated ('{gate}'), source on power"]
-            elif role_of(source) is NetRole.SIGNAL and any(
-                    o is not dev and polarity(o) == pol
-                    for o in drain_map[source]):
-                below = [o.name for o in drain_map[source] if o is not dev]
+            elif role_of(source) is NetRole.SIGNAL and stacked_below > 0:
+                below = drain_first.get((source, pol), "?")
                 role = "cascode"
-                evidence = [f"bias-gated ('{gate}'), stacked on "
-                            f"{','.join(below)}"]
+                evidence = [f"bias-gated ('{gate}'), stacked on {below}"]
             else:
                 role = "bias_gated"
                 evidence = [f"gate on bias net '{gate}'"]
@@ -66,13 +81,17 @@ def assign_device_roles(circuit: Circuit, infos: dict) -> dict:
             role = "rail_tied"
             evidence = [f"gate tied to rail '{gate}'"]
         else:  # signal-gated
-            peers = [o for o in source_groups[source]
-                     if o is not dev and polarity(o) == pol
-                     and control_net(o) != gate]
-            if role_of(source) is NetRole.SIGNAL and peers:
+            key = (source, pol)
+            peers = (group_count[key] - group_gate_count[(key, gate)]
+                     if not is_diode_connected(dev) else 0)
+            if role_of(source) is NetRole.SIGNAL and peers > 0:
+                sample = [n for n in group_samples[key]
+                          if n != dev.name][:2]
                 role = "diff_input"
                 evidence = [f"shares source '{source}' with "
-                            f"{','.join(o.name for o in peers)}"]
+                            f"{','.join(sample)}"
+                            + (f" (+{peers - len(sample)} more)"
+                               if peers > len(sample) else "")]
             elif role_of(source) in (NetRole.POWER, NetRole.GROUND):
                 role = "common_source"
                 evidence = [f"signal gate '{gate}', source on rail"]

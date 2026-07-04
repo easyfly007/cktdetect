@@ -71,10 +71,12 @@ def find_inverting_loops(circuit, infos) -> list:
 
     loops, seen = [], set()
     limit = 15
+    budget = [200_000]  # step budget: keeps huge flat designs linear-ish
 
     def dfs(start, node, path):
-        if len(path) > limit:
+        if len(path) > limit or budget[0] <= 0:
             return
+        budget[0] -= 1
         for nxt in sorted(edges.get(node, ())):
             if nxt == start:
                 key = frozenset(path)

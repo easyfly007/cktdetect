@@ -46,6 +46,8 @@ class SpectreParser(SpiceParser):
         for lineno, line in self._spectre_lines(text):
             self._raw_line = line
             stripped = re.sub(r"\s*=\s*", "=", line.lower())
+            stripped = re.sub(r"'[^']*'",
+                              lambda m: m.group(0).replace(" ", ""), stripped)
             try:
                 self._spectre_statement(stripped)
             except ParseError as exc:

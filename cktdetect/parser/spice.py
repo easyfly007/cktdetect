@@ -76,6 +76,10 @@ class SpiceParser:
         for index, (lineno, line) in enumerate(self._logical_lines(text)):
             self._raw_line = line
             stripped = re.sub(r"\s*=\s*", "=", line.lower())
+            # quoted expressions may contain spaces ('int((nf+1)/2) * w');
+            # collapse them so tokenization keeps the value in one piece
+            stripped = re.sub(r"'[^']*'",
+                              lambda m: m.group(0).replace(" ", ""), stripped)
             try:
                 if not self._statement(stripped):
                     break  # .end
@@ -372,14 +376,57 @@ class SpiceParser:
         self.netlist.warnings.append(f"{self._origin}: {message}")
 
     def _finalize(self):
-        """Resolve MOS/BJT polarity once all .model cards are known."""
+        """Promote profiled X-instances to primitive devices, then
+        resolve MOS/BJT polarity once all .model cards are known."""
         circuits = [self.netlist.top, *self.netlist.subckts.values()]
         for circ in circuits:
+            if self.profile is not None:
+                circ.devices = [self._promote_instance(dev) or dev
+                                for dev in circ.devices]
             for dev in circ.devices:
                 if dev.dtype in MOS_TYPES:
                     dev.dtype = self._mos_polarity(dev)
                 elif dev.dtype in BJT_TYPES:
                     dev.dtype = self._bjt_polarity(dev)
+
+    def _promote_instance(self, dev):
+        """PDK primitives are often instantiated as subckt calls
+        (sky130: ``X0 d g s b sky130_fd_pr__nfet_01v8 w=.. l=..``).
+        A profile mapping for the master name promotes the instance to
+        a typed device; a real subckt definition always wins."""
+        if dev.dtype is not DeviceType.SUBCKT:
+            return None
+        if dev.subckt in self.netlist.subckts:
+            return None
+        mapped = self.profile.model_type(dev.subckt)
+        if mapped is None:
+            return None
+        nets = list(dev.terminals.values())
+
+        def build(dtype, term_names):
+            if len(nets) < len(term_names):
+                self._warn(f"instance '{dev.name}' of '{dev.subckt}' has "
+                           f"{len(nets)} nodes, expected "
+                           f">={len(term_names)} -- not promoted")
+                return None
+            return Device(name=dev.name, dtype=dtype,
+                          terminals=dict(zip(term_names, nets)),
+                          model=dev.subckt, params=dev.params)
+
+        if mapped in ("nmos", "pmos"):
+            return build(DeviceType.MOS, ("d", "g", "s", "b"))
+        if mapped in ("npn", "pnp"):
+            keys = ("c", "b", "e", "s")[:min(len(nets), 4)]
+            return build(DeviceType.BJT, keys)
+        two_terminal = {
+            "resistor": DeviceType.RESISTOR,
+            "capacitor": DeviceType.CAPACITOR,
+            "inductor": DeviceType.INDUCTOR,
+            "diode": DeviceType.DIODE,
+        }
+        if mapped in two_terminal:
+            return build(two_terminal[mapped], ("p", "n"))
+        return None
 
     def _mos_polarity(self, dev) -> DeviceType:
         if self.profile is not None:

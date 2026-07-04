@@ -39,3 +39,32 @@
 （`tests/unit/test_external.py` 会在行为变化时报警）。
 历史记录：首轮验证为 9/12（cascode_current_mirror_ota 曾是缺口，
 由串联栈归一化补上）。
+
+## openfasoc/ — OpenFASOC 生成器电路（SKY130）
+
+- 来源：[idea-fasoc/OpenFASOC](https://github.com/idea-fasoc/OpenFASOC)
+  （开源硅生成器项目，SKY130 流片过），main 分支，2026-07 抓取。
+- 许可：Apache-2.0（与来源仓库一致，文件内容未修改）。
+- 特点：**SKY130 惯例——器件以 X 卡实例化 PDK 原语**
+  （`X0 d g s b sky130_fd_pr__nfet_01v8 w=.. l=..`），必须配
+  `profiles/sky130.json` PDK profile（X 实例提升 + vpwr/vgnd 轨名）；
+  xschem 导出风格（带空格的引号参数表达式、`sw<7>` 总线名、
+  `**` 注释）。这批文件直接推动了 X 实例提升机制、引号参数空格
+  处理，以及三处平方级热点的性能修复（20136 器件 48s → 1.3s）。
+
+## 验证结果（`--pdk-profile profiles/sky130.json --top <subckt>`）
+
+| netlist | 电路 | 分类结果 | 判定 |
+|---|---|---|---|
+| DCDC_COMP.sp | PMU 时钟比较器 | `strongarm_comparator` (0.9) | ✅ 正确 |
+| LC_Cell.spice | LC-DCO 谐振单元 | `lc_vco` (0.8) | ✅ 正确（电容在开关电容 bank，inductor-only tank 判据） |
+| swcap_3M2C.spice | DCO 开关电容 bank（534 器件） | `switched_capacitor_circuit` (0.85) | ✅ 正确 |
+| six_stage_conv.sp | 六级 SC DC-DC 变换器（20136 器件） | `switched_capacitor_circuit` (0.85) | ✅ 正确，1.3 秒完成 |
+| diff_cross_mirror.spice | DCO 负阻辅助单元 | `unknown` | ✅ 合理拒判（tank 在上层 LC cell，单独的交叉耦合+镜像不足以定型；交叉耦合结构在报告中可见） |
+
+**结论：4/5 正确标注 + 1 个合理拒判，0 个误判。**
+
+## 两个数据集合计
+
+17 个第三方电路：**14 个正确标注、3 个 unknown（2 个合理拒判 +
+1 个已知缺口）、0 个误判**。

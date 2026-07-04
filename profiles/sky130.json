@@ -1,0 +1,16 @@
+{
+  "models": {
+    "sky130_fd_pr__nfet*": "nmos",
+    "sky130_fd_pr__esd_nfet*": "nmos",
+    "sky130_fd_pr__special_nfet*": "nmos",
+    "sky130_fd_pr__pfet*": "pmos",
+    "sky130_fd_pr__npn*": "npn",
+    "sky130_fd_pr__pnp*": "pnp",
+    "sky130_fd_pr__cap*": "capacitor",
+    "sky130_fd_pr__res*": "resistor",
+    "sky130_fd_pr__ind*": "inductor",
+    "sky130_fd_pr__diode*": "diode"
+  },
+  "power_nets": ["vpwr*", "vccd*", "vcca*"],
+  "ground_nets": ["vgnd*", "vssd*", "vssa*"]
+}

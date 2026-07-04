@@ -46,9 +46,12 @@ mixer, sample-and-hold, switched-capacitor circuits, Dickson charge
 pump, R-2R ladder, passive filters (RC/LC low/high/bandpass) and
 resistive dividers.
 
-Validated against the independent [ALIGN benchmark
-suite](https://github.com/ALIGN-analoglayout/ALIGN-public): 9/12
-circuits labeled correctly, 3 honest rejections, 0 misjudgments — see
+Validated against independent third-party netlists — the [ALIGN
+benchmark suite](https://github.com/ALIGN-analoglayout/ALIGN-public)
+and [OpenFASOC](https://github.com/idea-fasoc/OpenFASOC) sky130
+generator circuits (via the bundled `profiles/sky130.json`): 14/17
+circuits labeled correctly, 3 honest rejections, 0 misjudgments; a
+20k-device switched-capacitor converter analyzes in ~1.3s. See
 `tests/external/README.md`.
 
 The full user guide — CLI reference, input format coverage, report

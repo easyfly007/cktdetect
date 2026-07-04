@@ -12,17 +12,25 @@ def verify_lc_vco(ctx):
     for xc in ctx.cross_coupled:
         nets = set(xc["nets"])
         for tank in ctx.tanks:
-            if not (set(tank["nets"]) & nets):
+            if tank["style"] == "inductor_only":
+                # no explicit C: only a perfect match with the
+                # cross-coupled nets is conclusive (switched-cap or
+                # varactor bank provides the capacitance elsewhere)
+                if set(tank["nets"]) != nets:
+                    continue
+            elif not (set(tank["nets"]) & nets):
                 continue
+            cap_note = (",".join(tank["capacitors"])
+                        if tank["capacitors"] else "external/switched bank")
             evidence = [
                 f"cross-coupled pair {','.join(xc['devices'])} "
                 f"(negative-gm cell)",
                 f"{tank['style']} LC tank "
                 f"(L: {','.join(tank['inductors'])}, "
-                f"C: {','.join(tank['capacitors'])}) on the oscillation "
+                f"C: {cap_note}) on the oscillation "
                 f"nets {','.join(tank['nets'])}",
             ]
-            confidence = 0.85
+            confidence = 0.85 if tank["capacitors"] else 0.8
             devices = [ctx.circuit.device(n) for n in xc["devices"]]
             tails = {source_net(d) for d in devices}
             if len(tails) == 1:

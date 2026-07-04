@@ -59,6 +59,11 @@ def classify_net_roles(circuit: Circuit, profile=None) -> dict:
         for term, net in dev.terminals.items():
             connections[net].append((dev, term))
 
+    source_index = defaultdict(list)
+    for dev in circuit.devices:
+        if is_transistor(dev) and not is_diode_connected(dev):
+            source_index[source_net(dev)].append(dev)
+
     for net, items in connections.items():
         if infos[net].role is not NetRole.SIGNAL:
             continue
@@ -75,11 +80,8 @@ def classify_net_roles(circuit: Circuit, profile=None) -> dict:
             continue
 
         def has_diff_peer(dev):
-            src = source_net(dev)
-            for other in circuit.devices:
-                if other is dev or not is_transistor(other):
-                    continue
-                if source_net(other) != src or is_diode_connected(other):
+            for other in source_index[source_net(dev)]:
+                if other is dev:
                     continue
                 ctrl = control_net(other)
                 if ctrl != net and infos[ctrl].role is NetRole.SIGNAL:

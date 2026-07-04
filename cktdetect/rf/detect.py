@@ -1,9 +1,12 @@
 """RF structure detection: LC tanks (DESIGN.md M4).
 
 Styles:
-- parallel:      L and C share both nets
-- differential:  two inductors from a common net, C across the far ends
-- single_ended:  L from a rail to a net, C from that net to a rail
+- parallel:       L and C share both nets
+- differential:   two inductors from a common net, C across the far ends
+- single_ended:   L from a rail to a net, C from that net to a rail
+- inductor_only:  L across two non-rail nets with no explicit C (the
+  capacitance is a varactor/switched bank or parasitic; consumers must
+  demand an exact net match before trusting this style)
 """
 
 from __future__ import annotations
@@ -62,4 +65,14 @@ def find_lc_tanks(circuit, infos) -> list:
                     "style": "single_ended", "nets": [x],
                     "inductors": [ind.name], "capacitors": [cap.name],
                 })
+
+    claimed = {frozenset(t["nets"]) for t in tanks}
+    for ind in inductors:
+        nets = [n for n in ind.nets[:2] if n not in rails]
+        if len(nets) != 2 or frozenset(nets) in claimed:
+            continue
+        tanks.append({
+            "style": "inductor_only", "nets": sorted(nets),
+            "inductors": [ind.name], "capacitors": [],
+        })
     return tanks

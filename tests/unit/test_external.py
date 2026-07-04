@@ -7,13 +7,17 @@ improvement, and this test failing on such a flip is the signal to
 update the README table alongside.
 """
 
+import time
 from pathlib import Path
 
 import pytest
 
 from cktdetect.cli import build_report
 
-ALIGN = Path(__file__).resolve().parents[1] / "external" / "align"
+EXTERNAL = Path(__file__).resolve().parents[1] / "external"
+ALIGN = EXTERNAL / "align"
+OPENFASOC = EXTERNAL / "openfasoc"
+SKY130_PROFILE = Path(__file__).resolve().parents[2] / "profiles" / "sky130.json"
 
 EXPECTED = {
     "five_transistor_ota": "single_stage_ota",
@@ -68,3 +72,46 @@ def test_sc_filter_keeps_embedded_ota_as_secondary():
     kinds = [v["type"] for v in report["classification"]]
     assert kinds[0] == "switched_capacitor_circuit"
     assert "telescopic_ota" in kinds  # the embedded amplifier is real
+
+
+# ----------------------------------------------------------------------
+# OpenFASOC (sky130): X-instance primitives resolved via the PDK profile
+
+OPENFASOC_EXPECTED = {
+    # (file, top subckt): expected top verdict
+    ("DCDC_COMP.sp", "dcdc_comp"): "strongarm_comparator",
+    ("LC_Cell.spice", "lc_cell_3"): "lc_vco",
+    ("swcap_3M2C.spice", "swcap_3m2c"): "switched_capacitor_circuit",
+    ("six_stage_conv.sp", "six_stage_conv"): "switched_capacitor_circuit",
+    # negative-gm aux cell: the tank lives in the enclosing LC cell,
+    # so an honest rejection is correct here
+    ("diff_cross_mirror.spice", "diff_cross_mirror"): "unknown",
+}
+
+
+@pytest.mark.parametrize("case,expected", sorted(OPENFASOC_EXPECTED.items()))
+def test_openfasoc_benchmark(case, expected):
+    fname, top = case
+    report = build_report(OPENFASOC / fname, top=top,
+                          pdk_profile=SKY130_PROFILE)
+    assert report["classification"][0]["type"] == expected
+
+
+def test_sky130_x_instances_promoted():
+    report = build_report(OPENFASOC / "DCDC_COMP.sp", top="dcdc_comp",
+                          pdk_profile=SKY130_PROFILE)
+    by_type = report["flat"]["devices_by_type"]
+    assert by_type == {"nmos": 5, "pmos": 6}
+    assert report["net_roles"]["vpwr"]["role"] == "power"
+    assert report["net_roles"]["vgnd"]["role"] == "ground"
+    assert not report["warnings"]
+
+
+def test_20k_device_converter_is_fast():
+    start = time.monotonic()
+    report = build_report(OPENFASOC / "six_stage_conv.sp",
+                          top="six_stage_conv",
+                          pdk_profile=SKY130_PROFILE)
+    elapsed = time.monotonic() - start
+    assert report["flat"]["device_count"] > 20000
+    assert elapsed < 15.0, f"analysis took {elapsed:.1f}s"
